@@ -46,7 +46,7 @@ import { auth } from "../../lib/firebase";
  * @param {string} formatString - The format string for date-fns
  * @returns {string} Formatted date string or "Not set"
  */
-const safeFormatDate = (dateValue, formatString = "dd-MM-yyyy") => {
+const safeFormatDate = (dateValue, formatString = "dd MMM yyyy") => {
   if (!dateValue) return "Not set";
 
   try {
