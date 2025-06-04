@@ -33,6 +33,7 @@ import {
   Speed as EfficiencyIcon,
   Visibility as ViewIcon,
   GetApp as ExportIcon,
+  History as HistoryIcon,
 } from "@mui/icons-material";
 import {
   collection,
@@ -53,6 +54,7 @@ import {
   startOfMonth,
   subMonths,
   endOfMonth,
+  differenceInDays,
 } from "date-fns";
 import { formatKES } from "../../utils/exportHelpers";
 import {
@@ -204,11 +206,8 @@ function QuickChart({ title, data, type = "bar", height = 200 }) {
   );
 }
 
-/**
- * Dashboard page component with enhanced analytics overview
- * @returns {JSX.Element} Dashboard page
- */
-export default function DashboardPage() {
+// Client-side only wrapper component
+function ClientDashboard() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
@@ -227,6 +226,8 @@ export default function DashboardPage() {
     costTrend: "stable",
     topPerformers: [],
     issues: [],
+    expiringInsuranceVehicles: [],
+    expiringInspectionVehicles: [],
   });
   const [chartData, setChartData] = useState({
     monthlyFuel: null,
@@ -256,29 +257,49 @@ export default function DashboardPage() {
       }));
 
       // Calculate date ranges for analytics
-      const currentMonth = startOfMonth(new Date());
-      const threeMonthsAgo = startOfMonth(subMonths(new Date(), 3));
-      const lastMonth = startOfMonth(subMonths(new Date(), 1));
-
-      // Count expiring documents
       const today = new Date();
+      const currentMonth = startOfMonth(today);
+      const threeMonthsAgo = startOfMonth(subMonths(today, 3));
+      const lastMonth = startOfMonth(subMonths(today, 1));
       const thirtyDaysFromNow = addDays(today, 30);
 
-      const expiringInsurance = vehicles.filter((vehicle) => {
-        if (!vehicle.insuranceExpiry) return false;
-        const expiryDate = vehicle.insuranceExpiry.toDate();
-        return (
-          isAfter(expiryDate, today) && !isAfter(expiryDate, thirtyDaysFromNow)
-        );
-      }).length;
+      // Count expiring documents
+      const expiringInsuranceVehicles = vehicles
+        .filter((vehicle) => {
+          if (!vehicle.insuranceExpiry) return false;
+          const expiryDate = vehicle.insuranceExpiry.toDate();
+          return (
+            isAfter(expiryDate, today) &&
+            !isAfter(expiryDate, thirtyDaysFromNow)
+          );
+        })
+        .map((vehicle) => ({
+          ...vehicle,
+          daysUntilExpiry: differenceInDays(
+            vehicle.insuranceExpiry.toDate(),
+            today
+          ),
+        }));
 
-      const expiringInspection = vehicles.filter((vehicle) => {
-        if (!vehicle.inspectionExpiry) return false;
-        const expiryDate = vehicle.inspectionExpiry.toDate();
-        return (
-          isAfter(expiryDate, today) && !isAfter(expiryDate, thirtyDaysFromNow)
-        );
-      }).length;
+      const expiringInspectionVehicles = vehicles
+        .filter((vehicle) => {
+          if (!vehicle.inspectionExpiry) return false;
+          const expiryDate = vehicle.inspectionExpiry.toDate();
+          return (
+            isAfter(expiryDate, today) &&
+            !isAfter(expiryDate, thirtyDaysFromNow)
+          );
+        })
+        .map((vehicle) => ({
+          ...vehicle,
+          daysUntilExpiry: differenceInDays(
+            vehicle.inspectionExpiry.toDate(),
+            today
+          ),
+        }));
+
+      const expiringInsurance = expiringInsuranceVehicles.length;
+      const expiringInspection = expiringInspectionVehicles.length;
 
       // Fetch comprehensive fuel data
       const fuelSnapshot = await getDocs(
@@ -432,9 +453,11 @@ export default function DashboardPage() {
         totalDistance: fleetAnalytics.totalDistance,
         averageCostPerKm: fleetAnalytics.costPerKm,
         fuelEfficiencyTrend: efficiencyTrend,
-        costTrend: "stable", // You can implement cost trend calculation
+        costTrend: "stable",
         topPerformers,
         issues: costIssues,
+        expiringInsuranceVehicles,
+        expiringInspectionVehicles,
       });
 
       setChartData({
@@ -590,319 +613,378 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <ProtectedRoute>
-        <DashboardLayout>
-          <Box
-            display="flex"
-            justifyContent="center"
-            alignItems="center"
-            minHeight="400px"
-          >
-            <CircularProgress size={60} />
-          </Box>
-        </DashboardLayout>
-      </ProtectedRoute>
+      <Box
+        display="flex"
+        justifyContent="center"
+        alignItems="center"
+        minHeight="400px"
+      >
+        <CircularProgress size={60} />
+      </Box>
     );
   }
 
   return (
-    <ProtectedRoute>
-      <DashboardLayout>
+    <Box>
+      {/* Header */}
+      <Box
+        display="flex"
+        justifyContent="space-between"
+        alignItems="center"
+        mb={3}
+      >
         <Box>
-          {/* Header */}
-          <Box
-            display="flex"
-            justifyContent="space-between"
-            alignItems="center"
-            mb={3}
+          <Typography variant="h4" gutterBottom fontWeight="bold">
+            Dashboard Overview
+          </Typography>
+          <Typography variant="body1" color="text.secondary">
+            Quick overview of your fleet status and key metrics
+          </Typography>
+        </Box>
+        <Box display="flex" gap={1}>
+          <Button
+            variant="outlined"
+            startIcon={<AnalyticsIcon />}
+            onClick={() => router.push("/analytics")}
           >
-            <Box>
-              <Typography variant="h4" gutterBottom fontWeight="bold">
-                Dashboard Overview
-              </Typography>
-              <Typography variant="body1" color="text.secondary">
-                Quick overview of your fleet status and key metrics
-              </Typography>
-            </Box>
-            <Box display="flex" gap={1}>
-              <Button
-                variant="outlined"
-                startIcon={<AnalyticsIcon />}
-                onClick={() => router.push("/analytics")}
-              >
-                View Analytics
-              </Button>
-              <Button
-                variant="outlined"
-                startIcon={<ExportIcon />}
-                onClick={() => router.push("/reports")}
-              >
-                Export Data
-              </Button>
-            </Box>
-          </Box>
+            View Analytics
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<ExportIcon />}
+            onClick={() => router.push("/reports")}
+          >
+            Export Data
+          </Button>
+        </Box>
+      </Box>
 
-          {error && (
-            <Alert severity="error" sx={{ mb: 3 }}>
-              {error}
-            </Alert>
+      {error && (
+        <Alert severity="error" sx={{ mb: 3 }}>
+          {error}
+        </Alert>
+      )}
+
+      {/* Primary Statistics Cards */}
+      <Grid container spacing={3} sx={{ mb: 4 }}>
+        <Grid item xs={12} sm={6} md={3}>
+          <AnalyticsCard
+            title="Total Vehicles"
+            value={stats.totalVehicles}
+            subtitle="Active fleet size"
+            icon={<VehiclesIcon />}
+            color="primary"
+            onClick={() => router.push("/vehicles")}
+          />
+        </Grid>
+        <Grid item xs={12} sm={6} md={3}>
+          <AnalyticsCard
+            title="Monthly Fuel Cost"
+            value={formatKES(stats.totalFuelCost)}
+            subtitle="Current month"
+            icon={<FuelIcon />}
+            color="success"
+            trend={{
+              direction:
+                stats.totalFuelCost < stats.previousMonthFuelCost
+                  ? "down"
+                  : "up",
+              text: `vs last month`,
+            }}
+            onClick={() => router.push("/fuel")}
+          />
+        </Grid>
+        <Grid item xs={12} sm={6} md={3}>
+          <AnalyticsCard
+            title="Previous Month"
+            value={formatKES(stats.previousMonthFuelCost)}
+            subtitle="Total fuel cost"
+            icon={<FuelIcon />}
+            color="info"
+            onClick={() => router.push("/fuel")}
+          />
+        </Grid>
+        <Grid item xs={12} sm={6} md={3}>
+          <AnalyticsCard
+            title="Operating Cost"
+            value={formatKES(stats.totalFuelCost + stats.totalMaintenanceCost)}
+            subtitle={`${formatKES(analytics.averageCostPerKm)}/km`}
+            icon={<MoneyIcon />}
+            color="warning"
+            onClick={() => router.push("/reports")}
+          />
+        </Grid>
+      </Grid>
+
+      {/* Charts Section */}
+      <Grid container spacing={3} sx={{ mb: 4 }}>
+        <Grid item xs={12} md={4}>
+          {chartData.monthlyFuel && (
+            <QuickChart
+              title="Monthly Fuel Costs"
+              data={chartData.monthlyFuel}
+              type="bar"
+            />
           )}
+        </Grid>
+        <Grid item xs={12} md={4}>
+          {chartData.efficiency && (
+            <QuickChart
+              title="Efficiency Trend"
+              data={chartData.efficiency}
+              type="line"
+            />
+          )}
+        </Grid>
+        <Grid item xs={12} md={4}>
+          {chartData.costBreakdown && (
+            <QuickChart
+              title="Cost Breakdown"
+              data={chartData.costBreakdown}
+              type="doughnut"
+            />
+          )}
+        </Grid>
+      </Grid>
 
-          {/* Primary Statistics Cards */}
-          <Grid container spacing={3} sx={{ mb: 4 }}>
-            <Grid item xs={12} sm={6} md={3}>
-              <AnalyticsCard
-                title="Total Vehicles"
-                value={stats.totalVehicles}
-                subtitle="Active fleet size"
-                icon={<VehiclesIcon />}
-                color="primary"
-                onClick={() => router.push("/vehicles")}
-              />
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <AnalyticsCard
-                title="Monthly Fuel Cost"
-                value={formatKES(stats.totalFuelCost)}
-                subtitle="Current month"
-                icon={<FuelIcon />}
-                color="success"
-                trend={{
-                  direction:
-                    stats.totalFuelCost < stats.previousMonthFuelCost
-                      ? "down"
-                      : "up",
-                  text: `vs last month`,
-                }}
-                onClick={() => router.push("/fuel")}
-              />
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <AnalyticsCard
-                title="Previous Month"
-                value={formatKES(stats.previousMonthFuelCost)}
-                subtitle="Total fuel cost"
-                icon={<FuelIcon />}
-                color="info"
-                onClick={() => router.push("/fuel")}
-              />
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <AnalyticsCard
-                title="Operating Cost"
-                value={formatKES(
-                  stats.totalFuelCost + stats.totalMaintenanceCost
-                )}
-                subtitle={`${formatKES(analytics.averageCostPerKm)}/km`}
-                icon={<MoneyIcon />}
-                color="warning"
-                onClick={() => router.push("/reports")}
-              />
-            </Grid>
-          </Grid>
+      {/* Performance Insights */}
+      <Grid container spacing={3} sx={{ mb: 4 }}>
+        {/* Top Performers */}
+        <Grid item xs={12} md={6}>
+          <Paper sx={{ p: 3, height: "100%" }}>
+            <Box
+              display="flex"
+              alignItems="center"
+              justifyContent="between"
+              mb={2}
+            >
+              <Typography variant="h6" fontWeight="medium">
+                Most Efficient Vehicles
+              </Typography>
+              <TrendingUpIcon color="success" />
+            </Box>
 
-          {/* Charts Section */}
-          <Grid container spacing={3} sx={{ mb: 4 }}>
-            <Grid item xs={12} md={4}>
-              {chartData.monthlyFuel && (
-                <QuickChart
-                  title="Monthly Fuel Costs"
-                  data={chartData.monthlyFuel}
-                  type="bar"
-                />
-              )}
-            </Grid>
-            <Grid item xs={12} md={4}>
-              {chartData.efficiency && (
-                <QuickChart
-                  title="Efficiency Trend"
-                  data={chartData.efficiency}
-                  type="line"
-                />
-              )}
-            </Grid>
-            <Grid item xs={12} md={4}>
-              {chartData.costBreakdown && (
-                <QuickChart
-                  title="Cost Breakdown"
-                  data={chartData.costBreakdown}
-                  type="doughnut"
-                />
-              )}
-            </Grid>
-          </Grid>
+            {analytics.topPerformers.length > 0 ? (
+              <List dense>
+                {analytics.topPerformers.map((vehicle, index) => (
+                  <ListItem
+                    key={vehicle.id}
+                    button
+                    onClick={() =>
+                      router.push(`/vehicles/${vehicle.id}/analytics`)
+                    }
+                  >
+                    <ListItemIcon>
+                      <Chip label={index + 1} size="small" color="success" />
+                    </ListItemIcon>
+                    <ListItemText
+                      primary={`${vehicle.regNumber} - ${vehicle.make} ${vehicle.model}`}
+                      secondary={`${vehicle.efficiency.toFixed(
+                        1
+                      )} km/L efficiency`}
+                    />
+                    <IconButton size="small">
+                      <ViewIcon />
+                    </IconButton>
+                  </ListItem>
+                ))}
+              </List>
+            ) : (
+              <Typography color="text.secondary">
+                No efficiency data available
+              </Typography>
+            )}
+          </Paper>
+        </Grid>
 
-          {/* Performance Insights */}
-          <Grid container spacing={3} sx={{ mb: 4 }}>
-            {/* Top Performers */}
-            <Grid item xs={12} md={6}>
-              <Paper sx={{ p: 3, height: "100%" }}>
-                <Box
-                  display="flex"
-                  alignItems="center"
-                  justifyContent="between"
-                  mb={2}
-                >
-                  <Typography variant="h6" fontWeight="medium">
-                    Most Efficient Vehicles
-                  </Typography>
-                  <TrendingUpIcon color="success" />
-                </Box>
+        {/* Cost Issues */}
+        <Grid item xs={12} md={6}>
+          <Paper sx={{ p: 3, height: "100%" }}>
+            <Box
+              display="flex"
+              alignItems="center"
+              justifyContent="between"
+              mb={2}
+            >
+              <Typography variant="h6" fontWeight="medium">
+                Highest Operating Costs
+              </Typography>
+              <WarningIcon color="warning" />
+            </Box>
 
-                {analytics.topPerformers.length > 0 ? (
-                  <List dense>
-                    {analytics.topPerformers.map((vehicle, index) => (
-                      <ListItem
-                        key={vehicle.id}
-                        button
-                        onClick={() =>
-                          router.push(`/vehicles/${vehicle.id}/analytics`)
-                        }
-                      >
-                        <ListItemIcon>
-                          <Chip
-                            label={index + 1}
-                            size="small"
-                            color="success"
-                          />
-                        </ListItemIcon>
-                        <ListItemText
-                          primary={`${vehicle.regNumber} - ${vehicle.make} ${vehicle.model}`}
-                          secondary={`${vehicle.efficiency.toFixed(
-                            1
-                          )} km/L efficiency`}
-                        />
-                        <IconButton size="small">
-                          <ViewIcon />
-                        </IconButton>
-                      </ListItem>
-                    ))}
-                  </List>
-                ) : (
-                  <Typography color="text.secondary">
-                    No efficiency data available
-                  </Typography>
-                )}
-              </Paper>
-            </Grid>
+            {analytics.issues.length > 0 ? (
+              <List dense>
+                {analytics.issues.map((vehicle, index) => (
+                  <ListItem key={vehicle.id} disablePadding>
+                    <ListItemButton
+                      onClick={() =>
+                        router.push(`/vehicles/${vehicle.id}/analytics`)
+                      }
+                    >
+                      <ListItemText
+                        primary={`${vehicle.regNumber} - ${vehicle.make} ${vehicle.model}`}
+                        secondary={`${formatKES(
+                          vehicle.costPerKm
+                        )}/km operating cost`}
+                      />
+                    </ListItemButton>
+                  </ListItem>
+                ))}
+              </List>
+            ) : (
+              <Typography color="text.secondary">
+                No cost data available
+              </Typography>
+            )}
+          </Paper>
+        </Grid>
+      </Grid>
 
-            {/* Cost Issues */}
-            <Grid item xs={12} md={6}>
-              <Paper sx={{ p: 3, height: "100%" }}>
-                <Box
-                  display="flex"
-                  alignItems="center"
-                  justifyContent="between"
-                  mb={2}
-                >
-                  <Typography variant="h6" fontWeight="medium">
-                    Highest Operating Costs
-                  </Typography>
-                  <WarningIcon color="warning" />
-                </Box>
+      {/* Alerts and Recent Activities */}
+      <Grid container spacing={3}>
+        {/* Expiry Alerts */}
+        <Grid item xs={12} md={6}>
+          <Paper sx={{ p: 3, height: "100%" }}>
+            <Box display="flex" alignItems="center" sx={{ mb: 2 }}>
+              <WarningIcon sx={{ mr: 1, color: "warning.main" }} />
+              <Typography variant="h6" fontWeight="medium">
+                Insurance Expiry Alerts
+              </Typography>
+            </Box>
 
-                {analytics.issues.length > 0 ? (
-                  <List dense>
-                    {analytics.issues.map((vehicle, index) => (
+            {analytics.expiringInsuranceVehicles.length > 0 ? (
+              <>
+                <Alert severity="warning" sx={{ mb: 2 }}>
+                  {analytics.expiringInsuranceVehicles.length} vehicle(s) have
+                  insurance expiring soon
+                </Alert>
+                <List dense>
+                  {analytics.expiringInsuranceVehicles
+                    .sort((a, b) => a.daysUntilExpiry - b.daysUntilExpiry)
+                    .map((vehicle) => (
                       <ListItem key={vehicle.id} disablePadding>
                         <ListItemButton
-                          onClick={() =>
-                            router.push(`/vehicles/${vehicle.id}/analytics`)
-                          }
+                          onClick={() => router.push(`/vehicles/${vehicle.id}`)}
                         >
                           <ListItemText
                             primary={`${vehicle.regNumber} - ${vehicle.make} ${vehicle.model}`}
-                            secondary={`${formatKES(
-                              vehicle.costPerKm
-                            )}/km operating cost`}
+                            secondary={`Insurance expires in ${vehicle.daysUntilExpiry} days`}
+                          />
+                          <Chip
+                            label={`${vehicle.daysUntilExpiry} days`}
+                            color={
+                              vehicle.daysUntilExpiry <= 7 ? "error" : "warning"
+                            }
+                            size="small"
+                            sx={{ ml: 1 }}
                           />
                         </ListItemButton>
                       </ListItem>
                     ))}
-                  </List>
-                ) : (
-                  <Typography color="text.secondary">
-                    No cost data available
-                  </Typography>
-                )}
-              </Paper>
-            </Grid>
-          </Grid>
+                </List>
+              </>
+            ) : (
+              <Alert severity="success">
+                No vehicles with expiring insurance in the next 30 days
+              </Alert>
+            )}
+          </Paper>
+        </Grid>
 
-          {/* Alerts and Recent Activities */}
-          <Grid container spacing={3}>
-            {/* Expiry Alerts */}
-            <Grid item xs={12} md={6}>
-              <Paper sx={{ p: 3, height: "100%" }}>
-                <Box display="flex" alignItems="center" sx={{ mb: 2 }}>
-                  <WarningIcon sx={{ mr: 1, color: "warning.main" }} />
-                  <Typography variant="h6" fontWeight="medium">
-                    Expiry Alerts (Next 30 Days)
-                  </Typography>
-                </Box>
+        {/* Inspection Expiry Alerts */}
+        <Grid item xs={12} md={6}>
+          <Paper sx={{ p: 3, height: "100%" }}>
+            <Box display="flex" alignItems="center" sx={{ mb: 2 }}>
+              <WarningIcon sx={{ mr: 1, color: "warning.main" }} />
+              <Typography variant="h6" fontWeight="medium">
+                Inspection Expiry Alerts
+              </Typography>
+            </Box>
 
-                {stats.expiringInsurance > 0 && (
-                  <Alert severity="warning" sx={{ mb: 1 }}>
-                    {stats.expiringInsurance} vehicle(s) have insurance expiring
-                    soon
-                  </Alert>
-                )}
-
-                {stats.expiringInspection > 0 && (
-                  <Alert severity="warning" sx={{ mb: 1 }}>
-                    {stats.expiringInspection} vehicle(s) have inspection
-                    expiring soon
-                  </Alert>
-                )}
-
-                {stats.expiringInsurance === 0 &&
-                  stats.expiringInspection === 0 && (
-                    <Alert severity="success">
-                      No vehicles with expiring documents in the next 30 days
-                    </Alert>
-                  )}
-              </Paper>
-            </Grid>
-
-            {/* Recent Activities */}
-            <Grid item xs={12} md={6}>
-              <Paper sx={{ p: 3, height: "100%" }}>
-                <Typography variant="h6" fontWeight="medium" sx={{ mb: 2 }}>
-                  Recent Activities
-                </Typography>
-
-                {recentActivities.length > 0 ? (
-                  <Box>
-                    {recentActivities.map((activity, index) => (
-                      <Box
-                        key={index}
-                        sx={{
-                          py: 1,
-                          borderBottom: "1px solid",
-                          borderColor: "divider",
-                        }}
-                      >
-                        <Typography variant="subtitle2" fontWeight="medium">
-                          {activity.title}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          {activity.description}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {format(activity.date, "dd-MM-yyyy HH:mm")}
-                        </Typography>
-                      </Box>
+            {analytics.expiringInspectionVehicles?.length > 0 ? (
+              <>
+                <Alert severity="warning" sx={{ mb: 2 }}>
+                  {analytics.expiringInspectionVehicles.length} vehicle(s) have
+                  inspection expiring soon
+                </Alert>
+                <List dense>
+                  {analytics.expiringInspectionVehicles
+                    .sort((a, b) => a.daysUntilExpiry - b.daysUntilExpiry)
+                    .map((vehicle) => (
+                      <ListItem key={vehicle.id} disablePadding>
+                        <ListItemButton
+                          onClick={() => router.push(`/vehicles/${vehicle.id}`)}
+                        >
+                          <ListItemText
+                            primary={`${vehicle.regNumber} - ${vehicle.make} ${vehicle.model}`}
+                            secondary={`Inspection expires in ${vehicle.daysUntilExpiry} days`}
+                          />
+                          <Chip
+                            label={`${vehicle.daysUntilExpiry} days`}
+                            color={
+                              vehicle.daysUntilExpiry <= 7 ? "error" : "warning"
+                            }
+                            size="small"
+                            sx={{ ml: 1 }}
+                          />
+                        </ListItemButton>
+                      </ListItem>
                     ))}
-                  </Box>
-                ) : (
-                  <Typography color="text.secondary">
-                    No recent activities
-                  </Typography>
-                )}
-              </Paper>
-            </Grid>
-          </Grid>
-        </Box>
+                </List>
+              </>
+            ) : (
+              <Alert severity="success">
+                No vehicles with expiring inspection in the next 30 days
+              </Alert>
+            )}
+          </Paper>
+        </Grid>
+
+        {/* Recent Activities */}
+        <Grid item xs={12} md={6}>
+          <Paper sx={{ p: 3, height: "100%" }}>
+            <Box display="flex" alignItems="center" sx={{ mb: 2 }}>
+              <HistoryIcon sx={{ mr: 1, color: "info.main" }} />
+              <Typography variant="h6" fontWeight="medium">
+                Recent Activities
+              </Typography>
+            </Box>
+
+            {recentActivities.length > 0 ? (
+              <List dense>
+                {recentActivities.map((activity, index) => (
+                  <ListItem key={index} disablePadding>
+                    <ListItemButton
+                      onClick={() =>
+                        router.push(`/vehicles/${activity.vehicleId}`)
+                      }
+                    >
+                      <ListItemText
+                        primary={activity.description}
+                        secondary={format(activity.date, "MMM dd, yyyy")}
+                      />
+                    </ListItemButton>
+                  </ListItem>
+                ))}
+              </List>
+            ) : (
+              <Typography color="text.secondary">
+                No recent activities
+              </Typography>
+            )}
+          </Paper>
+        </Grid>
+      </Grid>
+    </Box>
+  );
+}
+
+// Main dashboard page component
+export default function DashboardPage() {
+  return (
+    <ProtectedRoute>
+      <DashboardLayout>
+        <ClientDashboard />
       </DashboardLayout>
     </ProtectedRoute>
   );

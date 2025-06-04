@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Box, CircularProgress, Typography } from "@mui/material";
 import { useAuth } from "../app/contexts/AuthContext";
@@ -14,12 +14,21 @@ import { useAuth } from "../app/contexts/AuthContext";
 export default function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
   const router = useRouter();
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    if (!loading && !user) {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (mounted && !loading && !user) {
       router.replace("/login");
     }
-  }, [user, loading, router]);
+  }, [user, loading, router, mounted]);
+
+  if (!mounted) {
+    return null; // Return null on server-side to prevent hydration mismatch
+  }
 
   if (loading) {
     return (
