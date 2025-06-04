@@ -34,6 +34,7 @@ import {
   Visibility as ViewIcon,
   GetApp as ExportIcon,
   History as HistoryIcon,
+  CreditCard as CreditIcon,
 } from "@mui/icons-material";
 import {
   collection,
@@ -206,6 +207,29 @@ function QuickChart({ title, data, type = "bar", height = 200 }) {
   );
 }
 
+// Helper function to safely format dates
+const safeFormatDate = (date) => {
+  if (!date) return "N/A";
+  try {
+    // Handle Firestore Timestamp
+    if (date.toDate) {
+      return format(date.toDate(), "dd MMM yyyy");
+    }
+    // Handle JavaScript Date
+    if (date instanceof Date) {
+      return format(date, "dd MMM yyyy");
+    }
+    // Handle string date
+    if (typeof date === "string") {
+      return format(new Date(date), "dd MMM yyyy");
+    }
+    return "Invalid Date";
+  } catch (error) {
+    console.error("Error formatting date:", error);
+    return "Invalid Date";
+  }
+};
+
 // Client-side only wrapper component
 function ClientDashboard() {
   const router = useRouter();
@@ -236,9 +260,20 @@ function ClientDashboard() {
   });
   const [recentActivities, setRecentActivities] = useState([]);
   const [error, setError] = useState("");
+  const [monthlyStats, setMonthlyStats] = useState({
+    currentMonth: {
+      fuelCost: 0,
+      creditAmount: 0,
+    },
+    previousMonth: {
+      fuelCost: 0,
+      creditAmount: 0,
+    },
+  });
 
   useEffect(() => {
     fetchDashboardData();
+    fetchMonthlyStats();
   }, []);
 
   /**
@@ -470,6 +505,84 @@ function ClientDashboard() {
     } catch (error) {
       console.error("Error fetching dashboard data:", error);
       setError("Failed to load dashboard data. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /**
+   * Fetch monthly statistics
+   */
+  const fetchMonthlyStats = async () => {
+    try {
+      setLoading(true);
+      setError("");
+
+      const now = new Date();
+      const currentMonthStart = startOfMonth(now);
+      const currentMonthEnd = endOfMonth(now);
+      const previousMonthStart = startOfMonth(subMonths(now, 1));
+      const previousMonthEnd = endOfMonth(subMonths(now, 1));
+
+      // Fetch fuel records for both months
+      const fuelQuery = query(
+        collection(db, "fuelRecords"),
+        where("date", ">=", Timestamp.fromDate(currentMonthStart)),
+        where("date", "<=", Timestamp.fromDate(currentMonthEnd))
+      );
+      const fuelSnapshot = await getDocs(fuelQuery);
+      const currentMonthFuelCost = fuelSnapshot.docs.reduce(
+        (sum, doc) => sum + (doc.data().cost || 0),
+        0
+      );
+
+      const prevFuelQuery = query(
+        collection(db, "fuelRecords"),
+        where("date", ">=", Timestamp.fromDate(previousMonthStart)),
+        where("date", "<=", Timestamp.fromDate(previousMonthEnd))
+      );
+      const prevFuelSnapshot = await getDocs(prevFuelQuery);
+      const previousMonthFuelCost = prevFuelSnapshot.docs.reduce(
+        (sum, doc) => sum + (doc.data().cost || 0),
+        0
+      );
+
+      // Fetch credit records for both months
+      const creditQuery = query(
+        collection(db, "fuelLoans"),
+        where("date", ">=", Timestamp.fromDate(currentMonthStart)),
+        where("date", "<=", Timestamp.fromDate(currentMonthEnd))
+      );
+      const creditSnapshot = await getDocs(creditQuery);
+      const currentMonthCreditAmount = creditSnapshot.docs.reduce(
+        (sum, doc) => sum + (doc.data().amount || 0),
+        0
+      );
+
+      const prevCreditQuery = query(
+        collection(db, "fuelLoans"),
+        where("date", ">=", Timestamp.fromDate(previousMonthStart)),
+        where("date", "<=", Timestamp.fromDate(previousMonthEnd))
+      );
+      const prevCreditSnapshot = await getDocs(prevCreditQuery);
+      const previousMonthCreditAmount = prevCreditSnapshot.docs.reduce(
+        (sum, doc) => sum + (doc.data().amount || 0),
+        0
+      );
+
+      setMonthlyStats({
+        currentMonth: {
+          fuelCost: currentMonthFuelCost,
+          creditAmount: currentMonthCreditAmount,
+        },
+        previousMonth: {
+          fuelCost: previousMonthFuelCost,
+          creditAmount: previousMonthCreditAmount,
+        },
+      });
+    } catch (error) {
+      console.error("Error fetching monthly stats:", error);
+      setError("Failed to load monthly statistics. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -960,8 +1073,8 @@ function ClientDashboard() {
                       }
                     >
                       <ListItemText
-                        primary={activity.description}
-                        secondary={format(activity.date, "MMM dd, yyyy")}
+                        primary={activity.title}
+                        secondary={activity.description}
                       />
                     </ListItemButton>
                   </ListItem>
@@ -975,6 +1088,265 @@ function ClientDashboard() {
           </Paper>
         </Grid>
       </Grid>
+
+      {/* Quick Actions */}
+      <Grid container spacing={3} sx={{ mb: 6 }}>
+        <Grid item xs={12} md={4}>
+          <Card
+            sx={{
+              height: "100%",
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "center",
+              alignItems: "center",
+              p: 3,
+              cursor: "pointer",
+              "&:hover": {
+                backgroundColor: "action.hover",
+              },
+            }}
+            onClick={() => router.push("/fuel/records")}
+          >
+            <FuelIcon sx={{ fontSize: 40, color: "primary.main", mb: 2 }} />
+            <Typography variant="h6" align="center">
+              Record Fuel
+            </Typography>
+          </Card>
+        </Grid>
+        <Grid item xs={12} md={4}>
+          <Card
+            sx={{
+              height: "100%",
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "center",
+              alignItems: "center",
+              p: 3,
+              cursor: "pointer",
+              "&:hover": {
+                backgroundColor: "action.hover",
+              },
+            }}
+            onClick={() => router.push("/maintenance")}
+          >
+            <MaintenanceIcon
+              sx={{ fontSize: 40, color: "primary.main", mb: 2 }}
+            />
+            <Typography variant="h6" align="center">
+              Record Maintenance
+            </Typography>
+          </Card>
+        </Grid>
+        <Grid item xs={12} md={4}>
+          <Card
+            sx={{
+              height: "100%",
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "center",
+              alignItems: "center",
+              p: 3,
+              cursor: "pointer",
+              "&:hover": {
+                backgroundColor: "action.hover",
+              },
+            }}
+            onClick={() => router.push("/reports")}
+          >
+            <AnalyticsIcon
+              sx={{ fontSize: 40, color: "primary.main", mb: 2 }}
+            />
+            <Typography variant="h6" align="center">
+              View Reports
+            </Typography>
+          </Card>
+        </Grid>
+      </Grid>
+
+      <Typography
+        variant="h5"
+        sx={{
+          mb: 3,
+          fontWeight: "bold",
+          color: "text.primary",
+        }}
+      >
+        Monthly Overview
+      </Typography>
+
+      {/* Monthly Summary Cards */}
+      <Grid container spacing={3} sx={{ mb: 6 }}>
+        <Grid item xs={12} md={6}>
+          <Card
+            elevation={2}
+            sx={{
+              height: "100%",
+              background: "linear-gradient(145deg, #ffffff 0%, #f5f5f5 100%)",
+              "&:hover": {
+                boxShadow: 6,
+                transform: "translateY(-2px)",
+                transition: "all 0.3s ease-in-out",
+              },
+            }}
+          >
+            <CardContent>
+              <Typography
+                variant="h6"
+                gutterBottom
+                sx={{
+                  color: "primary.main",
+                  fontWeight: "bold",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 1,
+                }}
+              >
+                Current Month Total
+              </Typography>
+              <Divider sx={{ mb: 2 }} />
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                <Box>
+                  <Box
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 1,
+                      mb: 0.5,
+                    }}
+                  >
+                    <MoneyIcon color="primary" />
+                    <Typography variant="subtitle2" color="text.secondary">
+                      Total Expenses
+                    </Typography>
+                  </Box>
+                  <Typography
+                    variant="h5"
+                    sx={{
+                      fontWeight: "bold",
+                      color: "text.primary",
+                      pl: 4,
+                    }}
+                  >
+                    {formatKES(
+                      monthlyStats.currentMonth.fuelCost +
+                        monthlyStats.currentMonth.creditAmount
+                    )}
+                  </Typography>
+                </Box>
+                <Box sx={{ pl: 4 }}>
+                  <Typography variant="caption" color="text.secondary">
+                    Including fuel costs and credit transactions
+                  </Typography>
+                </Box>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid item xs={12} md={6}>
+          <Card
+            elevation={2}
+            sx={{
+              height: "100%",
+              background: "linear-gradient(145deg, #ffffff 0%, #f5f5f5 100%)",
+              "&:hover": {
+                boxShadow: 6,
+                transform: "translateY(-2px)",
+                transition: "all 0.3s ease-in-out",
+              },
+            }}
+          >
+            <CardContent>
+              <Typography
+                variant="h6"
+                gutterBottom
+                sx={{
+                  color: "primary.main",
+                  fontWeight: "bold",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 1,
+                }}
+              >
+                Previous Month Total
+              </Typography>
+              <Divider sx={{ mb: 2 }} />
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                <Box>
+                  <Box
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 1,
+                      mb: 0.5,
+                    }}
+                  >
+                    <MoneyIcon color="primary" />
+                    <Typography variant="subtitle2" color="text.secondary">
+                      Total Expenses
+                    </Typography>
+                  </Box>
+                  <Typography
+                    variant="h5"
+                    sx={{
+                      fontWeight: "bold",
+                      color: "text.primary",
+                      pl: 4,
+                    }}
+                  >
+                    {formatKES(
+                      monthlyStats.previousMonth.fuelCost +
+                        monthlyStats.previousMonth.creditAmount
+                    )}
+                  </Typography>
+                </Box>
+                <Box sx={{ pl: 4 }}>
+                  <Typography variant="caption" color="text.secondary">
+                    Including fuel costs and credit transactions
+                  </Typography>
+                </Box>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+
+      {/* Recent Activities */}
+      <Box sx={{ mb: 4 }}>
+        <Typography variant="h5" gutterBottom fontWeight="bold">
+          Recent Activities
+        </Typography>
+        <Paper sx={{ p: 2 }}>
+          <Grid container spacing={2}>
+            {recentActivities.map((activity, index) => (
+              <Grid item xs={12} key={index}>
+                <Card>
+                  <CardContent>
+                    <Box
+                      display="flex"
+                      justifyContent="space-between"
+                      alignItems="center"
+                    >
+                      <Box>
+                        <Typography variant="h6" gutterBottom>
+                          {activity.title}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          {activity.description}
+                        </Typography>
+                      </Box>
+                      <Box>
+                        <Typography variant="body2" color="text.secondary">
+                          {safeFormatDate(activity.date)}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))}
+          </Grid>
+        </Paper>
+      </Box>
     </Box>
   );
 }

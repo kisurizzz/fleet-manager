@@ -30,6 +30,7 @@ import {
   AccountCircle as AccountIcon,
   Logout as LogoutIcon,
   Analytics as AnalyticsIcon,
+  Money as MoneyIcon,
 } from "@mui/icons-material";
 import { useAuth } from "../app/contexts/AuthContext";
 
@@ -40,6 +41,7 @@ const navigationItems = [
   { title: "Analytics", icon: <AnalyticsIcon />, path: "/analytics" },
   { title: "Vehicles", icon: <VehiclesIcon />, path: "/vehicles" },
   { title: "Fuel Records", icon: <FuelIcon />, path: "/fuel" },
+  { title: "Fuel Credit", icon: <MoneyIcon />, path: "/fuel/loans" },
   { title: "Maintenance", icon: <MaintenanceIcon />, path: "/maintenance" },
   { title: "Reports", icon: <ReportsIcon />, path: "/reports" },
 ];
