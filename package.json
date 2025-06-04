@@ -1,0 +1,52 @@
+{
+  "name": "belbin-fleet-manager",
+  "version": "1.0.0",
+  "description": "Comprehensive fleet management web application for Belbin Travel",
+  "main": "index.js",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "populate-data": "node scripts/populateData.mjs",
+    "populate-enhanced-data": "node scripts/enhancedDataPopulator.mjs",
+    "create-admin": "node scripts/createAdminUser.mjs",
+    "delete-all-data": "node scripts/deleteAllData.mjs",
+    "create-fresh-test-data": "node scripts/createFreshTestData.mjs"
+  },
+  "keywords": [
+    "fleet-management",
+    "next.js",
+    "firebase",
+    "belbin-travel"
+  ],
+  "author": "Belbin Travel",
+  "license": "ISC",
+  "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.0",
+    "@mui/icons-material": "^7.1.0",
+    "@mui/material": "^7.1.0",
+    "@mui/x-data-grid": "^8.5.0",
+    "@mui/x-date-pickers": "^8.5.0",
+    "@tailwindcss/postcss": "^4.1.8",
+    "autoprefixer": "^10.4.21",
+    "chart.js": "^4.4.9",
+    "date-fns": "^4.1.0",
+    "firebase": "^11.8.1",
+    "jspdf": "^3.0.1",
+    "jspdf-autotable": "^5.0.2",
+    "next": "^15.3.3",
+    "papaparse": "^5.5.3",
+    "postcss": "^8.5.4",
+    "react": "^19.1.0",
+    "react-chartjs-2": "^5.3.0",
+    "react-dom": "^19.1.0",
+    "recharts": "^2.15.3",
+    "tailwindcss": "^4.1.8"
+  },
+  "devDependencies": {
+    "eslint": "9.27.0",
+    "eslint-config-next": "15.3.3"
+  }
+}
