@@ -41,7 +41,6 @@ next-env.d.ts
 
 # Project specific
 /scripts/
-/lib/
 /firebase/
 /firestore.rules
 /firebase-debug.log
