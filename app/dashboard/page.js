@@ -264,10 +264,12 @@ function ClientDashboard() {
     currentMonth: {
       fuelCost: 0,
       creditAmount: 0,
+      maintenanceCost: 0,
     },
     previousMonth: {
       fuelCost: 0,
       creditAmount: 0,
+      maintenanceCost: 0,
     },
   });
 
@@ -547,6 +549,29 @@ function ClientDashboard() {
         0
       );
 
+      // Fetch maintenance records for both months
+      const maintenanceQuery = query(
+        collection(db, "maintenanceRecords"),
+        where("date", ">=", Timestamp.fromDate(currentMonthStart)),
+        where("date", "<=", Timestamp.fromDate(currentMonthEnd))
+      );
+      const maintenanceSnapshot = await getDocs(maintenanceQuery);
+      const currentMonthMaintenanceCost = maintenanceSnapshot.docs.reduce(
+        (sum, doc) => sum + (doc.data().cost || 0),
+        0
+      );
+
+      const prevMaintenanceQuery = query(
+        collection(db, "maintenanceRecords"),
+        where("date", ">=", Timestamp.fromDate(previousMonthStart)),
+        where("date", "<=", Timestamp.fromDate(previousMonthEnd))
+      );
+      const prevMaintenanceSnapshot = await getDocs(prevMaintenanceQuery);
+      const previousMonthMaintenanceCost = prevMaintenanceSnapshot.docs.reduce(
+        (sum, doc) => sum + (doc.data().cost || 0),
+        0
+      );
+
       // Fetch credit records for both months
       const creditQuery = query(
         collection(db, "fuelLoans"),
@@ -574,10 +599,12 @@ function ClientDashboard() {
         currentMonth: {
           fuelCost: currentMonthFuelCost,
           creditAmount: currentMonthCreditAmount,
+          maintenanceCost: currentMonthMaintenanceCost,
         },
         previousMonth: {
           fuelCost: previousMonthFuelCost,
           creditAmount: previousMonthCreditAmount,
+          maintenanceCost: previousMonthMaintenanceCost,
         },
       });
     } catch (error) {
@@ -792,26 +819,32 @@ function ClientDashboard() {
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
           <AnalyticsCard
-            title="Monthly Fuel Cost"
-            value={formatKES(stats.totalFuelCost)}
-            subtitle="Current month"
+            title="Current Month Fuel"
+            value={formatKES(monthlyStats.currentMonth.fuelCost)}
+            subtitle={format(startOfMonth(new Date()), "MMMM yyyy")}
             icon={<FuelIcon />}
-            color="success"
+            color="warning"
             trend={{
               direction:
-                stats.totalFuelCost < stats.previousMonthFuelCost
-                  ? "down"
-                  : "up",
-              text: `vs last month`,
+                monthlyStats.currentMonth.fuelCost >
+                monthlyStats.previousMonth.fuelCost
+                  ? "up"
+                  : "down",
+              text: `${Math.abs(
+                ((monthlyStats.currentMonth.fuelCost -
+                  monthlyStats.previousMonth.fuelCost) /
+                  monthlyStats.previousMonth.fuelCost) *
+                  100
+              ).toFixed(1)}% vs last month`,
             }}
             onClick={() => router.push("/fuel")}
           />
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
           <AnalyticsCard
-            title="Previous Month"
-            value={formatKES(stats.previousMonthFuelCost)}
-            subtitle="Total fuel cost"
+            title="Previous Month Fuel"
+            value={formatKES(monthlyStats.previousMonth.fuelCost)}
+            subtitle={format(subMonths(new Date(), 1), "MMMM yyyy")}
             icon={<FuelIcon />}
             color="info"
             onClick={() => router.push("/fuel")}
@@ -819,12 +852,39 @@ function ClientDashboard() {
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
           <AnalyticsCard
-            title="Operating Cost"
-            value={formatKES(stats.totalFuelCost + stats.totalMaintenanceCost)}
-            subtitle={`${formatKES(analytics.averageCostPerKm)}/km`}
+            title="Monthly Maintenance"
+            value={formatKES(monthlyStats.currentMonth.maintenanceCost)}
+            subtitle={format(startOfMonth(new Date()), "MMMM yyyy")}
+            icon={<MaintenanceIcon />}
+            color="error"
+            trend={{
+              direction:
+                monthlyStats.currentMonth.maintenanceCost >
+                monthlyStats.previousMonth.maintenanceCost
+                  ? "up"
+                  : "down",
+              text: `${Math.abs(
+                ((monthlyStats.currentMonth.maintenanceCost -
+                  monthlyStats.previousMonth.maintenanceCost) /
+                  monthlyStats.previousMonth.maintenanceCost) *
+                  100
+              ).toFixed(1)}% vs last month`,
+            }}
+            onClick={() => router.push("/maintenance")}
+          />
+        </Grid>
+        <Grid item xs={12} sm={6} md={3}>
+          <AnalyticsCard
+            title="Total Cost"
+            value={formatKES(
+              monthlyStats.currentMonth.fuelCost +
+                monthlyStats.currentMonth.creditAmount +
+                monthlyStats.currentMonth.maintenanceCost
+            )}
+            subtitle="This Month"
             icon={<MoneyIcon />}
-            color="warning"
-            onClick={() => router.push("/reports")}
+            color="success"
+            onClick={() => router.push("/analytics")}
           />
         </Grid>
       </Grid>
@@ -1229,13 +1289,15 @@ function ClientDashboard() {
                   >
                     {formatKES(
                       monthlyStats.currentMonth.fuelCost +
-                        monthlyStats.currentMonth.creditAmount
+                        monthlyStats.currentMonth.creditAmount +
+                        monthlyStats.currentMonth.maintenanceCost
                     )}
                   </Typography>
                 </Box>
                 <Box sx={{ pl: 4 }}>
                   <Typography variant="caption" color="text.secondary">
-                    Including fuel costs and credit transactions
+                    Including fuel costs, maintenance costs, and credit
+                    transactions
                   </Typography>
                 </Box>
               </Box>
@@ -1295,13 +1357,15 @@ function ClientDashboard() {
                   >
                     {formatKES(
                       monthlyStats.previousMonth.fuelCost +
-                        monthlyStats.previousMonth.creditAmount
+                        monthlyStats.previousMonth.creditAmount +
+                        monthlyStats.previousMonth.maintenanceCost
                     )}
                   </Typography>
                 </Box>
                 <Box sx={{ pl: 4 }}>
                   <Typography variant="caption" color="text.secondary">
-                    Including fuel costs and credit transactions
+                    Including fuel costs, maintenance costs, and credit
+                    transactions
                   </Typography>
                 </Box>
               </Box>
