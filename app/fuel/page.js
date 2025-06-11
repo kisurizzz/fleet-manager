@@ -145,17 +145,21 @@ export default function FuelRecordsPage() {
       const fuelList = fuelSnapshot.docs.map((doc) => {
         const data = doc.data();
         const vehicle = vehiclesList.find((v) => v.id === data.vehicleId);
+        const date = data.date?.toDate();
 
         return {
           id: doc.id,
           ...data,
-          date: data.date?.toDate(),
+          date: date,
           vehicleName: vehicle
             ? `${vehicle.regNumber} (${vehicle.make} ${vehicle.model})`
             : "Unknown Vehicle",
-          formattedDate: data.date
-            ? format(data.date.toDate(), "dd-MM-yyyy")
-            : "",
+          formattedDate: date ? format(date, "dd-MM-yyyy") : "N/A",
+          cost: Number(data.cost || 0),
+          liters: Number(data.liters || 0),
+          odometerReading: Number(data.odometerReading || 0),
+          kmTraveled: Number(data.kmTraveled || 0),
+          fuelEfficiency: Number(data.fuelEfficiency || 0),
         };
       });
 
@@ -442,7 +446,7 @@ export default function FuelRecordsPage() {
         if (value === undefined || value === null) {
           return "0L";
         }
-        return `${value}L`;
+        return `${Number(value).toFixed(1)}L`;
       },
     },
     {
@@ -454,7 +458,7 @@ export default function FuelRecordsPage() {
         if (value === undefined || value === null) {
           return formatKES(0);
         }
-        return formatKES(value);
+        return formatKES(Number(value));
       },
     },
     {
@@ -464,21 +468,16 @@ export default function FuelRecordsPage() {
       type: "number",
       valueGetter: (params) => {
         const row = params.row;
-        if (
-          !row ||
-          typeof row.cost === "undefined" ||
-          typeof row.liters === "undefined" ||
-          !row.liters
-        ) {
+        if (!row || !row.cost || !row.liters || row.liters === 0) {
           return 0;
         }
-        return row.cost / row.liters;
+        return Number(row.cost) / Number(row.liters);
       },
       valueFormatter: (value) => {
-        if (value === undefined || value === null) {
-          return formatKES(0);
+        if (value === undefined || value === null || value === 0) {
+          return "N/A";
         }
-        return formatKES(value);
+        return formatKES(Number(value));
       },
     },
     {
@@ -487,10 +486,10 @@ export default function FuelRecordsPage() {
       width: 100,
       type: "number",
       valueFormatter: (value) => {
-        if (value === undefined || value === null) {
+        if (value === undefined || value === null || value === 0) {
           return "N/A";
         }
-        return `${value} km/L`;
+        return `${Number(value).toFixed(1)} km/L`;
       },
     },
     {
@@ -521,10 +520,10 @@ export default function FuelRecordsPage() {
       width: 120,
       type: "number",
       valueFormatter: (value) => {
-        if (value === undefined || value === null) {
+        if (value === undefined || value === null || value === 0) {
           return "N/A";
         }
-        return `${value} km`;
+        return `${Number(value).toLocaleString()} km`;
       },
     },
     {
