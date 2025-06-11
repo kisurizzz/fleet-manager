@@ -25,6 +25,7 @@ import {
   FormControlLabel,
   Checkbox,
   IconButton,
+  Tooltip,
 } from "@mui/material";
 import { DataGrid } from "@mui/x-data-grid";
 import {
@@ -142,6 +143,7 @@ export default function FuelRecordsPage() {
         query(collection(db, "fuelRecords"), orderBy("date", "desc"))
       );
 
+      // Process fuel records to calculate efficiency
       const fuelList = fuelSnapshot.docs.map((doc) => {
         const data = doc.data();
         const vehicle = vehiclesList.find((v) => v.id === data.vehicleId);
@@ -151,8 +153,6 @@ export default function FuelRecordsPage() {
         const cost = parseFloat(data.cost) || 0;
         const liters = parseFloat(data.liters) || 0;
         const odometerReading = parseFloat(data.odometerReading) || 0;
-        const kmTraveled = parseFloat(data.kmTraveled) || 0;
-        const fuelEfficiency = parseFloat(data.fuelEfficiency) || 0;
 
         return {
           id: doc.id,
@@ -165,9 +165,40 @@ export default function FuelRecordsPage() {
           cost,
           liters,
           odometerReading,
-          kmTraveled,
-          fuelEfficiency,
         };
+      });
+
+      // Sort records by date for each vehicle to calculate efficiency
+      const vehicleRecords = {};
+      fuelList.forEach((record) => {
+        if (!vehicleRecords[record.vehicleId]) {
+          vehicleRecords[record.vehicleId] = [];
+        }
+        vehicleRecords[record.vehicleId].push(record);
+      });
+
+      // Calculate efficiency for each vehicle's records
+      Object.keys(vehicleRecords).forEach((vehicleId) => {
+        const records = vehicleRecords[vehicleId].sort(
+          (a, b) => a.date - b.date
+        );
+        records.forEach((record, index) => {
+          if (index > 0) {
+            const previousRecord = records[index - 1];
+            const distance =
+              record.odometerReading - previousRecord.odometerReading;
+
+            // For partial fueling, we'll still calculate efficiency but mark it as partial
+            const efficiency = record.liters > 0 ? distance / record.liters : 0;
+            record.distanceSinceLastFuel = distance;
+            record.fuelEfficiency = efficiency;
+            record.isPartialEfficiency = record.fillType === "partial";
+          } else {
+            record.distanceSinceLastFuel = 0;
+            record.fuelEfficiency = 0;
+            record.isPartialEfficiency = false;
+          }
+        });
       });
 
       setFuelRecords(fuelList);
@@ -498,14 +529,50 @@ export default function FuelRecordsPage() {
     {
       field: "fuelEfficiency",
       headerName: "km/L",
-      width: 100,
+      width: 120,
       type: "number",
       valueFormatter: (params) => {
         const value = parseFloat(params.value);
         if (isNaN(value) || value === 0) {
           return "N/A";
         }
-        return `${value.toFixed(1)} km/L`;
+        const isPartial = params.row?.isPartialEfficiency || false;
+        return `${value.toFixed(1)} km/L${isPartial ? " (partial)" : ""}`;
+      },
+      renderCell: (params) => {
+        const value = parseFloat(params.value);
+        if (isNaN(value) || value === 0) {
+          return "N/A";
+        }
+        const isPartial = params.row?.isPartialEfficiency || false;
+        return (
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <Typography>{`${value.toFixed(1)} km/L`}</Typography>
+            {isPartial && (
+              <Tooltip title="Partial fueling - efficiency may not reflect full tank performance">
+                <Chip
+                  label="Partial"
+                  size="small"
+                  color="warning"
+                  variant="outlined"
+                />
+              </Tooltip>
+            )}
+          </Box>
+        );
+      },
+    },
+    {
+      field: "distanceSinceLastFuel",
+      headerName: "Distance",
+      width: 120,
+      type: "number",
+      valueFormatter: (params) => {
+        const value = parseFloat(params.value);
+        if (isNaN(value) || value === 0) {
+          return "N/A";
+        }
+        return `${value.toLocaleString()} km`;
       },
     },
     {
