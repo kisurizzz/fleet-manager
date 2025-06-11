@@ -67,13 +67,23 @@ export const calculateVehicleAnalytics = (
   const averageDistanceBetweenFueling =
     fuelUps > 1 ? totalDistance / (fuelUps - 1) : 0;
 
-  const recordsWithEfficiency = fuelRecords.filter(
-    (record) => record.fuelEfficiency
-  );
+  // Calculate efficiency for each record
+  const recordsWithEfficiency = recordsWithDistance
+    .map((record) => {
+      const efficiency =
+        record.liters > 0 ? record.distanceSinceLastFuel / record.liters : 0;
+      return {
+        ...record,
+        calculatedEfficiency: efficiency,
+      };
+    })
+    .filter((record) => record.calculatedEfficiency > 0);
+
+  // Calculate average efficiency
   const averageEfficiency =
     recordsWithEfficiency.length > 0
       ? recordsWithEfficiency.reduce(
-          (sum, record) => sum + (record.fuelEfficiency || 0),
+          (sum, record) => sum + record.calculatedEfficiency,
           0
         ) / recordsWithEfficiency.length
       : 0;
@@ -176,8 +186,17 @@ export const groupFuelRecordsByMonth = (fuelRecords = []) => {
  * @returns {Object} Efficiency analysis with trends and patterns
  */
 export const analyzeFuelEfficiency = (fuelRecords = []) => {
-  const recordsWithEfficiency = fuelRecords
-    .filter((record) => record.fuelEfficiency && record.date)
+  // Calculate efficiency for each record
+  const recordsWithEfficiency = calculateDistanceBetweenFueling(fuelRecords)
+    .map((record) => {
+      const efficiency =
+        record.liters > 0 ? record.distanceSinceLastFuel / record.liters : 0;
+      return {
+        ...record,
+        calculatedEfficiency: efficiency,
+      };
+    })
+    .filter((record) => record.calculatedEfficiency > 0)
     .sort((a, b) => a.date - b.date);
 
   if (recordsWithEfficiency.length === 0) {
@@ -192,7 +211,7 @@ export const analyzeFuelEfficiency = (fuelRecords = []) => {
   }
 
   const efficiencyValues = recordsWithEfficiency.map(
-    (record) => record.fuelEfficiency
+    (record) => record.calculatedEfficiency
   );
   const bestEfficiency = Math.max(...efficiencyValues);
   const worstEfficiency = Math.min(...efficiencyValues);
@@ -205,10 +224,12 @@ export const analyzeFuelEfficiency = (fuelRecords = []) => {
   const oldRecords = recordsWithEfficiency.slice(0, 6); // First 6 records
 
   const recentAverage =
-    recentRecords.reduce((sum, record) => sum + record.fuelEfficiency, 0) /
-    recentRecords.length;
+    recentRecords.reduce(
+      (sum, record) => sum + record.calculatedEfficiency,
+      0
+    ) / recentRecords.length;
   const oldAverage =
-    oldRecords.reduce((sum, record) => sum + record.fuelEfficiency, 0) /
+    oldRecords.reduce((sum, record) => sum + record.calculatedEfficiency, 0) /
     oldRecords.length;
 
   const improvementRate =
@@ -248,7 +269,6 @@ export const analyzeFuelEfficiency = (fuelRecords = []) => {
     improvementRate: Number(improvementRate.toFixed(2)),
     isImproving,
     recommendations,
-    totalDataPoints: recordsWithEfficiency.length,
   };
 };
 

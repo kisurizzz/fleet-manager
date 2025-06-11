@@ -147,6 +147,13 @@ export default function FuelRecordsPage() {
         const vehicle = vehiclesList.find((v) => v.id === data.vehicleId);
         const date = data.date?.toDate();
 
+        // Safely convert numeric values
+        const cost = parseFloat(data.cost) || 0;
+        const liters = parseFloat(data.liters) || 0;
+        const odometerReading = parseFloat(data.odometerReading) || 0;
+        const kmTraveled = parseFloat(data.kmTraveled) || 0;
+        const fuelEfficiency = parseFloat(data.fuelEfficiency) || 0;
+
         return {
           id: doc.id,
           ...data,
@@ -155,11 +162,11 @@ export default function FuelRecordsPage() {
             ? `${vehicle.regNumber} (${vehicle.make} ${vehicle.model})`
             : "Unknown Vehicle",
           formattedDate: date ? format(date, "dd-MM-yyyy") : "N/A",
-          cost: Number(data.cost || 0),
-          liters: Number(data.liters || 0),
-          odometerReading: Number(data.odometerReading || 0),
-          kmTraveled: Number(data.kmTraveled || 0),
-          fuelEfficiency: Number(data.fuelEfficiency || 0),
+          cost,
+          liters,
+          odometerReading,
+          kmTraveled,
+          fuelEfficiency,
         };
       });
 
@@ -442,11 +449,12 @@ export default function FuelRecordsPage() {
       headerName: "Liters",
       width: 100,
       type: "number",
-      valueFormatter: (value) => {
-        if (value === undefined || value === null) {
+      valueFormatter: (params) => {
+        const value = parseFloat(params.value);
+        if (isNaN(value) || value === 0) {
           return "0L";
         }
-        return `${Number(value).toFixed(1)}L`;
+        return `${value.toFixed(1)}L`;
       },
     },
     {
@@ -454,11 +462,12 @@ export default function FuelRecordsPage() {
       headerName: "Cost",
       width: 120,
       type: "number",
-      valueFormatter: (value) => {
-        if (value === undefined || value === null) {
+      valueFormatter: (params) => {
+        const value = parseFloat(params.value);
+        if (isNaN(value)) {
           return formatKES(0);
         }
-        return formatKES(Number(value));
+        return formatKES(value);
       },
     },
     {
@@ -469,15 +478,21 @@ export default function FuelRecordsPage() {
       valueGetter: (params) => {
         const row = params.row;
         if (!row || !row.cost || !row.liters || row.liters === 0) {
-          return 0;
+          return null;
         }
-        return Number(row.cost) / Number(row.liters);
+        const cost = parseFloat(row.cost);
+        const liters = parseFloat(row.liters);
+        if (isNaN(cost) || isNaN(liters) || liters === 0) {
+          return null;
+        }
+        return cost / liters;
       },
-      valueFormatter: (value) => {
-        if (value === undefined || value === null || value === 0) {
+      valueFormatter: (params) => {
+        const value = parseFloat(params.value);
+        if (isNaN(value) || value === 0) {
           return "N/A";
         }
-        return formatKES(Number(value));
+        return formatKES(value);
       },
     },
     {
@@ -485,11 +500,12 @@ export default function FuelRecordsPage() {
       headerName: "km/L",
       width: 100,
       type: "number",
-      valueFormatter: (value) => {
-        if (value === undefined || value === null || value === 0) {
+      valueFormatter: (params) => {
+        const value = parseFloat(params.value);
+        if (isNaN(value) || value === 0) {
           return "N/A";
         }
-        return `${Number(value).toFixed(1)} km/L`;
+        return `${value.toFixed(1)} km/L`;
       },
     },
     {
@@ -519,11 +535,12 @@ export default function FuelRecordsPage() {
       headerName: "Odometer",
       width: 120,
       type: "number",
-      valueFormatter: (value) => {
-        if (value === undefined || value === null || value === 0) {
+      valueFormatter: (params) => {
+        const value = parseFloat(params.value);
+        if (isNaN(value) || value === 0) {
           return "N/A";
         }
-        return `${Number(value).toLocaleString()} km`;
+        return `${value.toLocaleString()} km`;
       },
     },
     {

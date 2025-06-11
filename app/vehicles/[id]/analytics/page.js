@@ -143,7 +143,7 @@ const safeNumber = (value, fallback = 0) => {
  */
 export default function VehicleAnalyticsPage({ params }) {
   const router = useRouter();
-  const vehicleId = use(params).id;
+  const vehicleId = params.id;
 
   // State management
   const [vehicle, setVehicle] = useState(null);
@@ -602,6 +602,97 @@ export default function VehicleAnalyticsPage({ params }) {
                     </Box>
                     <SpeedIcon color="primary" sx={{ fontSize: 40 }} />
                   </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+          </Grid>
+
+          {/* Analytics Cards */}
+          <Grid container spacing={3} mb={4}>
+            {/* Fuel Efficiency Card */}
+            <Grid item xs={12} md={6} lg={3}>
+              <Card>
+                <CardContent>
+                  <Box display="flex" alignItems="center" mb={2}>
+                    <SpeedIcon color="primary" sx={{ mr: 1 }} />
+                    <Typography variant="h6">Fuel Efficiency</Typography>
+                  </Box>
+                  <Typography variant="h4" gutterBottom>
+                    {safeToFixed(analytics.averageEfficiency, 1)} km/L
+                  </Typography>
+                  <Box display="flex" alignItems="center" gap={1}>
+                    {analytics.isEfficiencyImproving ? (
+                      <TrendingUpIcon color="success" />
+                    ) : (
+                      <TrendingDownIcon color="error" />
+                    )}
+                    <Typography
+                      variant="body2"
+                      color={
+                        analytics.isEfficiencyImproving
+                          ? "success.main"
+                          : "error.main"
+                      }
+                    >
+                      {analytics.efficiencyTrend === "improving"
+                        ? "Improving"
+                        : analytics.efficiencyTrend === "declining"
+                        ? "Declining"
+                        : "Stable"}
+                    </Typography>
+                  </Box>
+                  <Typography variant="body2" color="text.secondary" mt={1}>
+                    Best: {safeToFixed(analytics.bestEfficiency, 1)} km/L
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Worst: {safeToFixed(analytics.worstEfficiency, 1)} km/L
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            <Grid item xs={12} md={6} lg={3}>
+              <Card>
+                <CardContent>
+                  <Box display="flex" alignItems="center" mb={2}>
+                    <MaintenanceIcon color="primary" sx={{ mr: 1 }} />
+                    <Typography variant="h6">Maintenance</Typography>
+                  </Box>
+                  <Typography variant="h4" gutterBottom>
+                    {safeNumber(analytics.maintenanceCount)}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" mt={1}>
+                    Total Cost:{" "}
+                    {formatKES(safeNumber(analytics.totalMaintenanceCost))}
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            <Grid item xs={12} md={6} lg={3}>
+              <Card>
+                <CardContent>
+                  <Box display="flex" alignItems="center" mb={2}>
+                    <MoneyIcon color="primary" sx={{ mr: 1 }} />
+                    <Typography variant="h6">Cost Per km</Typography>
+                  </Box>
+                  <Typography variant="h4" gutterBottom>
+                    {formatKES(safeNumber(analytics.costPerKm))}
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            <Grid item xs={12} md={6} lg={3}>
+              <Card>
+                <CardContent>
+                  <Box display="flex" alignItems="center" mb={2}>
+                    <MoneyIcon color="primary" sx={{ mr: 1 }} />
+                    <Typography variant="h6">Total Fuel Cost</Typography>
+                  </Box>
+                  <Typography variant="h4" gutterBottom>
+                    {formatKES(safeNumber(analytics.totalFuelCost))}
+                  </Typography>
                 </CardContent>
               </Card>
             </Grid>
