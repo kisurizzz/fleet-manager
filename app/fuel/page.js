@@ -462,8 +462,14 @@ export default function FuelRecordsPage() {
       headerName: "Cost/Liter",
       width: 120,
       type: "number",
-      valueGetter: (value, row) => {
-        if (!row.cost || !row.liters) {
+      valueGetter: (params) => {
+        const row = params.row;
+        if (
+          !row ||
+          typeof row.cost === "undefined" ||
+          typeof row.liters === "undefined" ||
+          !row.liters
+        ) {
           return 0;
         }
         return row.cost / row.liters;

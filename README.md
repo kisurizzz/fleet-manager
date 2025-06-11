@@ -2,6 +2,10 @@
 
 A comprehensive fleet management web application built with Next.js 14, Firebase, and Material-UI for Belbin Travel.
 
+## 🌐 Live Demo
+
+The application is deployed and available at: [https://fleetmanager-delta.vercel.app](https://fleetmanager-delta.vercel.app)
+
 ## Features
 
 ### 🔐 Authentication System
