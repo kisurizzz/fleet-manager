@@ -161,7 +161,7 @@ export default function LoginPage() {
               variant="contained"
               sx={{ mt: 3, mb: 2, py: 1.5 }}
             >
-              "Sign In"
+              Sign In
             </Button>
           </Box>
 
