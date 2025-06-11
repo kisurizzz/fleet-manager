@@ -31,6 +31,7 @@ import {
   Logout as LogoutIcon,
   Analytics as AnalyticsIcon,
   Money as MoneyIcon,
+  Settings as SettingsIcon,
 } from "@mui/icons-material";
 import { useAuth } from "../app/contexts/AuthContext";
 
@@ -44,6 +45,7 @@ const navigationItems = [
   { title: "Fuel Credit", icon: <MoneyIcon />, path: "/fuel/loans" },
   { title: "Maintenance", icon: <MaintenanceIcon />, path: "/maintenance" },
   { title: "Reports", icon: <ReportsIcon />, path: "/reports" },
+  { title: "Fuel Prices", icon: <SettingsIcon />, path: "/admin/fuel-prices" },
 ];
 
 /**

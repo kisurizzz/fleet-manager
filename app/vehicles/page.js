@@ -208,6 +208,12 @@ function VehicleCard({ vehicle, onEdit, onDelete, onAnalytics, onReports }) {
         <Box display="flex" gap={1} mb={2} flexWrap="wrap">
           <Chip label={vehicle.color} size="small" />
           <Chip label={vehicle.station} size="small" variant="outlined" />
+          <Chip
+            label={vehicle.fuelType || "Petrol"}
+            size="small"
+            color={vehicle.fuelType === "Diesel" ? "warning" : "success"}
+            variant="outlined"
+          />
         </Box>
 
         {/* Expiry Warnings */}

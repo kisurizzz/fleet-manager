@@ -12,6 +12,7 @@ import {
   Alert,
   CircularProgress,
   FormControl,
+  InputLabel,
   Select,
   MenuItem,
   Card,
@@ -242,7 +243,7 @@ export default function VehicleDetailPage({ params }) {
   const [activeTab, setActiveTab] = useState(0);
 
   const router = useRouter();
-  const { id } = use(params);
+  const { id } = params;
 
   useEffect(() => {
     if (id) {
@@ -288,6 +289,7 @@ export default function VehicleDetailPage({ params }) {
         model: vehicleData.model || "",
         year: vehicleData.year || "",
         station: vehicleData.station || "",
+        fuelType: vehicleData.fuelType || "Petrol",
         insuranceExpiry: safeToDate(vehicleData.insuranceExpiry),
         inspectionExpiry: safeToDate(vehicleData.inspectionExpiry),
       });
@@ -799,7 +801,7 @@ export default function VehicleDetailPage({ params }) {
                           disabled={!isEditing}
                         />
                       </Grid>
-                      <Grid item xs={12}>
+                      <Grid item xs={12} sm={6}>
                         <TextField
                           fullWidth
                           name="station"
@@ -808,6 +810,20 @@ export default function VehicleDetailPage({ params }) {
                           onChange={handleInputChange}
                           disabled={!isEditing}
                         />
+                      </Grid>
+                      <Grid item xs={12} sm={6}>
+                        <FormControl fullWidth required disabled={!isEditing}>
+                          <InputLabel>Fuel Type</InputLabel>
+                          <Select
+                            name="fuelType"
+                            value={formData.fuelType}
+                            onChange={handleInputChange}
+                            label="Fuel Type"
+                          >
+                            <MenuItem value="Petrol">Petrol</MenuItem>
+                            <MenuItem value="Diesel">Diesel</MenuItem>
+                          </Select>
+                        </FormControl>
                       </Grid>
                     </Grid>
                   </Paper>

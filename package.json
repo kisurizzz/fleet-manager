@@ -12,7 +12,8 @@
     "populate-enhanced-data": "node scripts/enhancedDataPopulator.mjs",
     "create-admin": "node scripts/createAdminUser.mjs",
     "delete-all-data": "node scripts/deleteAllData.mjs",
-    "create-fresh-test-data": "node scripts/createFreshTestData.mjs"
+    "create-fresh-test-data": "node scripts/createFreshTestData.mjs",
+    "set-fuel-prices": "node scripts/setInitialFuelPrices.mjs"
   },
   "keywords": [
     "fleet-management",

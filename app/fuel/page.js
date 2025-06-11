@@ -46,6 +46,7 @@ import {
   where,
   updateDoc,
   doc,
+  getDoc,
 } from "firebase/firestore";
 import { db } from "../../lib/firebase";
 import ProtectedRoute from "../../components/ProtectedRoute";
@@ -81,7 +82,7 @@ export default function FuelRecordsPage() {
     date: null,
     liters: "",
     cost: "",
-    station: "",
+    station: "Shell Woodvale Groove",
     odometerReading: "",
     kmTraveled: "",
     fuelType: "Petrol",
@@ -100,8 +101,16 @@ export default function FuelRecordsPage() {
     monthlyTotal: 0,
   });
 
+  // Global fuel prices
+  const [globalPrices, setGlobalPrices] = useState({
+    petrolPrice: 0,
+    dieselPrice: 0,
+    autoPopulate: true,
+  });
+
   useEffect(() => {
     fetchData();
+    fetchGlobalPrices();
   }, []);
 
   useEffect(() => {
@@ -121,6 +130,27 @@ export default function FuelRecordsPage() {
       }));
     }
   }, [formData.date, editMode]);
+
+  /**
+   * Fetch global fuel prices
+   */
+  const fetchGlobalPrices = async () => {
+    try {
+      const globalSettingsRef = doc(db, "globalSettings", "fuel-prices");
+      const globalSettingsSnapshot = await getDoc(globalSettingsRef);
+
+      if (globalSettingsSnapshot.exists()) {
+        const data = globalSettingsSnapshot.data();
+        setGlobalPrices({
+          petrolPrice: data.petrolPrice || 0,
+          dieselPrice: data.dieselPrice || 0,
+          autoPopulate: true,
+        });
+      }
+    } catch (error) {
+      console.error("Error fetching global prices:", error);
+    }
+  };
 
   /**
    * Fetch fuel records and vehicles data
@@ -289,10 +319,47 @@ export default function FuelRecordsPage() {
    */
   const handleInputChange = (event) => {
     const { name, value } = event.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    setFormData((prev) => {
+      const newFormData = {
+        ...prev,
+        [name]: value,
+      };
+
+      // Auto-populate fuel type when vehicle changes
+      if (name === "vehicleId" && value) {
+        const selectedVehicle = vehicles.find((v) => v.id === value);
+        if (selectedVehicle && selectedVehicle.fuelType) {
+          newFormData.fuelType = selectedVehicle.fuelType;
+        }
+      }
+
+      // Calculate liters when cost or fuel type changes
+      if (
+        (name === "cost" || name === "fuelType" || name === "vehicleId") &&
+        globalPrices.autoPopulate
+      ) {
+        const cost =
+          name === "cost" ? parseFloat(value) : parseFloat(prev.cost);
+        const fuelType =
+          name === "fuelType"
+            ? value
+            : name === "vehicleId"
+            ? newFormData.fuelType
+            : prev.fuelType;
+
+        if (cost > 0 && fuelType) {
+          const pricePerLiter =
+            fuelType === "Diesel"
+              ? globalPrices.dieselPrice
+              : globalPrices.petrolPrice;
+          if (pricePerLiter > 0) {
+            newFormData.liters = (cost / pricePerLiter).toFixed(2);
+          }
+        }
+      }
+
+      return newFormData;
+    });
   };
 
   /**
@@ -446,7 +513,7 @@ export default function FuelRecordsPage() {
       date: null,
       liters: "",
       cost: "",
-      station: "",
+      station: "Shell Woodvale Groove",
       odometerReading: "",
       kmTraveled: "",
       fuelType: "Petrol",
@@ -933,23 +1000,6 @@ export default function FuelRecordsPage() {
                     <TextField
                       fullWidth
                       required
-                      name="liters"
-                      label="Liters"
-                      type="number"
-                      value={formData.liters}
-                      onChange={handleInputChange}
-                      inputProps={{ min: 0, step: 0.01 }}
-                      InputProps={{
-                        endAdornment: (
-                          <InputAdornment position="end">L</InputAdornment>
-                        ),
-                      }}
-                    />
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <TextField
-                      fullWidth
-                      required
                       name="cost"
                       label="Cost"
                       type="number"
@@ -961,6 +1011,35 @@ export default function FuelRecordsPage() {
                           <InputAdornment position="start">KES</InputAdornment>
                         ),
                       }}
+                      helperText={
+                        globalPrices.autoPopulate && formData.fuelType
+                          ? `Auto-calculating liters using ${
+                              formData.fuelType
+                            } price: ${formatKES(
+                              formData.fuelType === "Diesel"
+                                ? globalPrices.dieselPrice
+                                : globalPrices.petrolPrice
+                            )}/L`
+                          : "Enter the total cost paid"
+                      }
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      fullWidth
+                      required
+                      name="liters"
+                      label="Liters"
+                      type="number"
+                      value={formData.liters}
+                      onChange={handleInputChange}
+                      inputProps={{ min: 0, step: 0.01 }}
+                      InputProps={{
+                        endAdornment: (
+                          <InputAdornment position="end">L</InputAdornment>
+                        ),
+                      }}
+                      helperText="Calculated based on cost and current fuel price"
                     />
                   </Grid>
                   <Grid item xs={12} sm={6}>

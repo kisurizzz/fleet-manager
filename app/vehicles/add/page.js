@@ -116,6 +116,7 @@ export default function AddVehiclePage() {
     model: "",
     year: "",
     station: "",
+    fuelType: "Petrol",
     insuranceExpiry: null,
     inspectionExpiry: null,
   });
@@ -250,10 +251,11 @@ export default function AddVehiclePage() {
       !formData.regNumber ||
       !formData.make ||
       !formData.model ||
-      !formData.year
+      !formData.year ||
+      !formData.fuelType
     ) {
       setError(
-        "Please fill in all required fields (Registration Number, Make, Model, Year)"
+        "Please fill in all required fields (Registration Number, Make, Model, Year, Fuel Type)"
       );
       return;
     }
@@ -389,7 +391,7 @@ export default function AddVehiclePage() {
                         placeholder="e.g., 2023"
                       />
                     </Grid>
-                    <Grid item xs={12}>
+                    <Grid item xs={12} sm={6}>
                       <TextField
                         fullWidth
                         name="station"
@@ -398,6 +400,20 @@ export default function AddVehiclePage() {
                         onChange={handleInputChange}
                         placeholder="e.g., Nairobi"
                       />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <FormControl fullWidth required>
+                        <InputLabel>Fuel Type</InputLabel>
+                        <Select
+                          name="fuelType"
+                          value={formData.fuelType}
+                          onChange={handleInputChange}
+                          label="Fuel Type"
+                        >
+                          <MenuItem value="Petrol">Petrol</MenuItem>
+                          <MenuItem value="Diesel">Diesel</MenuItem>
+                        </Select>
+                      </FormControl>
                     </Grid>
                   </Grid>
                 </Paper>
