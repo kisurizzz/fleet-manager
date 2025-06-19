@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+import { useRouter, useParams } from "next/navigation";
 import {
   Box,
   Typography,
@@ -15,25 +15,17 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  FormControlLabel,
-  FormGroup,
-  Checkbox,
   Card,
   CardContent,
-  CardHeader,
   Divider,
 } from "@mui/material";
-import {
-  CloudUpload as UploadIcon,
-  Save as SaveIcon,
-  ArrowBack as BackIcon,
-} from "@mui/icons-material";
+import { Save as SaveIcon, ArrowBack as BackIcon } from "@mui/icons-material";
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
-import { addDoc, collection } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { db, storage } from "../../../lib/firebase";
-import ProtectedRoute from "../../../components/ProtectedRoute";
-import DashboardLayout from "../../../components/DashboardLayout";
+import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { db } from "../../../../lib/firebase";
+import ProtectedRoute from "../../../../components/ProtectedRoute";
+import DashboardLayout from "../../../../components/DashboardLayout";
+import { getLatestOdometerReading } from "../../../../utils/serviceHelpers";
 
 // Default amenities list with status options
 const DEFAULT_AMENITIES = {
@@ -105,10 +97,10 @@ function AmenityItem({ name, label, value, onChange }) {
 }
 
 /**
- * Add vehicle page component
- * @returns {JSX.Element} Add vehicle page
+ * Edit vehicle page component
+ * @returns {JSX.Element} Edit vehicle page
  */
-export default function AddVehiclePage() {
+export default function EditVehiclePage() {
   const [formData, setFormData] = useState({
     regNumber: "",
     color: "",
@@ -124,12 +116,70 @@ export default function AddVehiclePage() {
     currentOdometer: "",
   });
   const [amenities, setAmenities] = useState(DEFAULT_AMENITIES);
-  const [selectedImage, setSelectedImage] = useState(null);
-  const [imagePreview, setImagePreview] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [latestOdometer, setLatestOdometer] = useState(null);
 
   const router = useRouter();
+  const params = useParams();
+  const vehicleId = params.id;
+
+  useEffect(() => {
+    if (vehicleId) {
+      fetchVehicleData();
+    }
+  }, [vehicleId]);
+
+  /**
+   * Fetch existing vehicle data
+   */
+  const fetchVehicleData = async () => {
+    try {
+      setLoading(true);
+      setError("");
+
+      const vehicleDoc = await getDoc(doc(db, "vehicles", vehicleId));
+
+      if (!vehicleDoc.exists()) {
+        setError("Vehicle not found");
+        return;
+      }
+
+      const vehicleData = vehicleDoc.data();
+
+      // Get the latest odometer reading from fuel records
+      const latestReading = await getLatestOdometerReading(vehicleId);
+      setLatestOdometer(latestReading);
+
+      // Convert Firebase timestamps to Date objects
+      const insuranceExpiry = vehicleData.insuranceExpiry?.toDate() || null;
+      const inspectionExpiry = vehicleData.inspectionExpiry?.toDate() || null;
+
+      setFormData({
+        regNumber: vehicleData.regNumber || "",
+        color: vehicleData.color || "",
+        make: vehicleData.make || "",
+        model: vehicleData.model || "",
+        year: vehicleData.year || "",
+        station: vehicleData.station || "",
+        fuelType: vehicleData.fuelType || "Petrol",
+        insuranceExpiry: insuranceExpiry,
+        inspectionExpiry: inspectionExpiry,
+        nextServiceDue: vehicleData.nextServiceDue || "",
+        serviceInterval: vehicleData.serviceInterval || "10000",
+        currentOdometer: vehicleData.currentOdometer || "",
+      });
+
+      // Set amenities or use defaults
+      setAmenities(vehicleData.amenities || DEFAULT_AMENITIES);
+    } catch (error) {
+      console.error("Error fetching vehicle data:", error);
+      setError("Failed to load vehicle data. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   /**
    * Handle form field changes
@@ -156,41 +206,6 @@ export default function AddVehiclePage() {
   };
 
   /**
-   * Handle image selection
-   * @param {Event} event - File input change event
-   */
-  const handleImageChange = (event) => {
-    const file = event.target.files[0];
-    if (file) {
-      // Check file size (limit to 5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        setError("Image file size must be less than 5MB");
-        return;
-      }
-
-      // Check file type
-      const allowedTypes = [
-        "image/jpeg",
-        "image/jpg",
-        "image/png",
-        "image/webp",
-      ];
-      if (!allowedTypes.includes(file.type)) {
-        setError(
-          "Please select a valid image file (JPEG, PNG, or WebP). HEIC files are not supported."
-        );
-        return;
-      }
-
-      setSelectedImage(file);
-      setError(""); // Clear any previous errors
-      const reader = new FileReader();
-      reader.onload = (e) => setImagePreview(e.target.result);
-      reader.readAsDataURL(file);
-    }
-  };
-
-  /**
    * Handle amenity changes
    * @param {string} name - Amenity name
    * @param {Object} value - Amenity value
@@ -200,47 +215,6 @@ export default function AddVehiclePage() {
       ...prev,
       [name]: value,
     }));
-  };
-
-  /**
-   * Upload image to Firebase Storage
-   * @returns {Promise<string>} Download URL
-   */
-  const uploadImage = async () => {
-    if (!selectedImage) return null;
-
-    try {
-      const timestamp = Date.now();
-      // Convert file name to avoid special characters
-      const sanitizedFileName = selectedImage.name
-        .replace(/[^a-zA-Z0-9.-]/g, "_")
-        .toLowerCase();
-      const fileName = `vehicles/${timestamp}_${sanitizedFileName}`;
-      const storageRef = ref(storage, fileName);
-
-      console.log("Uploading image:", fileName);
-      const snapshot = await uploadBytes(storageRef, selectedImage);
-      const downloadURL = await getDownloadURL(snapshot.ref);
-      console.log("Upload successful:", downloadURL);
-      return downloadURL;
-    } catch (error) {
-      console.error("Upload error details:", error);
-
-      // Handle specific error types
-      if (error.code === "storage/unauthorized") {
-        throw new Error(
-          "Authentication required. Please log in and try again."
-        );
-      } else if (error.code === "storage/quota-exceeded") {
-        throw new Error("Storage quota exceeded. Please contact support.");
-      } else if (error.message.includes("CORS")) {
-        throw new Error(
-          "Upload blocked by security settings. Please try again or contact support."
-        );
-      } else {
-        throw new Error(`Upload failed: ${error.message}`);
-      }
-    }
   };
 
   /**
@@ -263,33 +237,27 @@ export default function AddVehiclePage() {
       return;
     }
 
-    setLoading(true);
+    setSaving(true);
     setError("");
 
     try {
-      // Upload image if selected (disabled for now)
-      // const imageUrl = await uploadImage();
-      const imageUrl = ""; // Image upload disabled
-
-      // Prepare vehicle data
-      const vehicleData = {
+      // Prepare update data
+      const updateData = {
         ...formData,
-        imageUrl: imageUrl || "",
         amenities,
-        createdAt: new Date(),
         updatedAt: new Date(),
       };
 
-      // Add vehicle to Firestore
-      await addDoc(collection(db, "vehicles"), vehicleData);
+      // Update vehicle document
+      await updateDoc(doc(db, "vehicles", vehicleId), updateData);
 
-      // Redirect to vehicles page
-      router.push("/vehicles");
+      // Redirect back to vehicles page with success message
+      router.push("/vehicles?updated=true");
     } catch (error) {
-      console.error("Error adding vehicle:", error);
-      setError("Failed to add vehicle. Please try again.");
+      console.error("Error updating vehicle:", error);
+      setError("Failed to update vehicle. Please try again.");
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
@@ -299,6 +267,23 @@ export default function AddVehiclePage() {
   const handleBack = () => {
     router.push("/vehicles");
   };
+
+  if (loading) {
+    return (
+      <ProtectedRoute>
+        <DashboardLayout>
+          <Box
+            display="flex"
+            justifyContent="center"
+            alignItems="center"
+            minHeight="400px"
+          >
+            <CircularProgress size={60} />
+          </Box>
+        </DashboardLayout>
+      </ProtectedRoute>
+    );
+  }
 
   return (
     <ProtectedRoute>
@@ -315,10 +300,10 @@ export default function AddVehiclePage() {
             </Button>
             <Box>
               <Typography variant="h4" gutterBottom fontWeight="bold">
-                Add New Vehicle
+                Edit Vehicle
               </Typography>
               <Typography variant="body1" color="text.secondary">
-                Register a new vehicle in your fleet
+                Update vehicle information and service tracking
               </Typography>
             </Box>
           </Box>
@@ -326,6 +311,19 @@ export default function AddVehiclePage() {
           {error && (
             <Alert severity="error" sx={{ mb: 3 }}>
               {error}
+            </Alert>
+          )}
+
+          {/* Latest Odometer Reading Alert */}
+          {latestOdometer && (
+            <Alert severity="info" sx={{ mb: 3 }}>
+              Latest odometer reading from fuel records:{" "}
+              <strong>{latestOdometer.toLocaleString()} km</strong>
+              <br />
+              <small>
+                You can use this as reference for setting current odometer or
+                service due mileage.
+              </small>
             </Alert>
           )}
 
@@ -421,7 +419,7 @@ export default function AddVehiclePage() {
                   </Grid>
                 </Paper>
 
-                {/* Expiry Dates */}
+                {/* Document Expiry Dates */}
                 <Paper sx={{ p: 3, mt: 3 }}>
                   <Typography variant="h6" gutterBottom fontWeight="medium">
                     Document Expiry Dates
@@ -462,6 +460,14 @@ export default function AddVehiclePage() {
                   <Typography variant="h6" gutterBottom fontWeight="medium">
                     Service Tracking
                   </Typography>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ mb: 3 }}
+                  >
+                    Set up service reminders based on odometer readings. The
+                    system will alert you when service is due.
+                  </Typography>
 
                   <Grid container spacing={2}>
                     <Grid item xs={12} sm={6}>
@@ -476,7 +482,11 @@ export default function AddVehiclePage() {
                         InputProps={{
                           endAdornment: "km",
                         }}
-                        helperText="Current mileage of the vehicle"
+                        helperText={
+                          latestOdometer
+                            ? `Latest from fuel records: ${latestOdometer.toLocaleString()} km`
+                            : "Current mileage of the vehicle"
+                        }
                       />
                     </Grid>
                     <Grid item xs={12} sm={6}>
@@ -513,232 +523,118 @@ export default function AddVehiclePage() {
                 </Paper>
               </Grid>
 
-              {/* Image Upload */}
+              {/* Service Status Card */}
               <Grid item xs={12} md={4}>
                 <Paper sx={{ p: 3 }}>
                   <Typography variant="h6" gutterBottom fontWeight="medium">
-                    Vehicle Image
+                    Service Status
                   </Typography>
 
-                  {/* Temporarily disabled image upload */}
-                  {false && (
-                    <>
-                      <input
-                        accept="image/jpeg,image/jpg,image/png,image/webp"
-                        style={{ display: "none" }}
-                        id="image-upload"
-                        type="file"
-                        onChange={handleImageChange}
-                      />
-                      <label htmlFor="image-upload">
-                        <Button
-                          variant="outlined"
-                          component="span"
-                          startIcon={<UploadIcon />}
-                          fullWidth
-                          sx={{ mb: 2 }}
-                        >
-                          Upload Image
-                        </Button>
-                      </label>
+                  {latestOdometer && formData.nextServiceDue ? (
+                    <Card sx={{ mt: 2 }}>
+                      <CardContent>
+                        <Typography variant="subtitle2" gutterBottom>
+                          Current Status
+                        </Typography>
 
-                      <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        sx={{ mb: 2, display: "block" }}
-                      >
-                        Supported formats: JPEG, PNG, WebP (max 5MB)
-                      </Typography>
-                    </>
-                  )}
+                        <Typography variant="body2" sx={{ mb: 1 }}>
+                          <strong>Current:</strong>{" "}
+                          {latestOdometer.toLocaleString()} km
+                        </Typography>
 
-                  <Typography
-                    variant="body2"
-                    color="warning.main"
-                    sx={{ mb: 2, p: 1, bgcolor: "warning.50", borderRadius: 1 }}
-                  >
-                    ⚠️ Image upload is temporarily disabled
-                  </Typography>
+                        {formData.nextServiceDue && (
+                          <>
+                            <Typography variant="body2" sx={{ mb: 1 }}>
+                              <strong>Due at:</strong>{" "}
+                              {parseInt(
+                                formData.nextServiceDue
+                              ).toLocaleString()}{" "}
+                              km
+                            </Typography>
 
-                  {imagePreview ? (
-                    <Box
-                      component="img"
-                      src={imagePreview}
-                      alt="Vehicle preview"
-                      sx={{
-                        width: "100%",
-                        height: 200,
-                        objectFit: "cover",
-                        borderRadius: 1,
-                        border: "1px solid",
-                        borderColor: "divider",
-                      }}
-                    />
+                            <Typography
+                              variant="body2"
+                              sx={{
+                                color:
+                                  parseInt(formData.nextServiceDue) -
+                                    latestOdometer <=
+                                  0
+                                    ? "error.main"
+                                    : parseInt(formData.nextServiceDue) -
+                                        latestOdometer <=
+                                      1000
+                                    ? "warning.main"
+                                    : "success.main",
+                                fontWeight: "bold",
+                              }}
+                            >
+                              {parseInt(formData.nextServiceDue) -
+                                latestOdometer <=
+                              0
+                                ? `Overdue by ${Math.abs(
+                                    parseInt(formData.nextServiceDue) -
+                                      latestOdometer
+                                  ).toLocaleString()} km`
+                                : `${(
+                                    parseInt(formData.nextServiceDue) -
+                                    latestOdometer
+                                  ).toLocaleString()} km until service`}
+                            </Typography>
+                          </>
+                        )}
+                      </CardContent>
+                    </Card>
                   ) : (
-                    <Box
-                      sx={{
-                        width: "100%",
-                        height: 200,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        bgcolor: "grey.100",
-                        borderRadius: 1,
-                        border: "1px solid",
-                        borderColor: "divider",
-                      }}
-                    >
-                      <Typography variant="body2" color="text.secondary">
-                        No image
-                      </Typography>
-                    </Box>
+                    <Alert severity="info" sx={{ mt: 2 }}>
+                      {!latestOdometer
+                        ? "No fuel records found. Add fuel records to track current mileage."
+                        : "Set next service due to see status."}
+                    </Alert>
                   )}
                 </Paper>
-              </Grid>
 
-              {/* Amenities */}
-              <Grid item xs={12}>
-                <Card>
-                  <CardHeader title="Vehicle Amenities" />
-                  <Divider />
-                  <CardContent>
-                    <Grid container spacing={2}>
-                      <AmenityItem
-                        name="wifiGadgets"
-                        label="WiFi Gadgets"
-                        value={amenities.wifiGadgets}
-                        onChange={handleAmenityChange}
-                      />
-                      <AmenityItem
-                        name="servietteBox"
-                        label="Serviette Box"
-                        value={amenities.servietteBox}
-                        onChange={handleAmenityChange}
-                      />
-                      <AmenityItem
-                        name="carMats"
-                        label="Car Mats"
-                        value={amenities.carMats}
-                        onChange={handleAmenityChange}
-                      />
-                      <AmenityItem
-                        name="chargerHead"
-                        label="Charger Head"
-                        value={amenities.chargerHead}
-                        onChange={handleAmenityChange}
-                      />
-                      <AmenityItem
-                        name="chargingCable"
-                        label="Charging Cable"
-                        value={amenities.chargingCable}
-                        onChange={handleAmenityChange}
-                      />
-                      <AmenityItem
-                        name="coolerBox"
-                        label="Cooler Box"
-                        value={amenities.coolerBox}
-                        onChange={handleAmenityChange}
-                      />
-                      <AmenityItem
-                        name="umbrellas"
-                        label="Umbrellas"
-                        value={amenities.umbrellas}
-                        onChange={handleAmenityChange}
-                      />
-                      <AmenityItem
-                        name="kapsSticker"
-                        label="KAPS Sticker"
-                        value={amenities.kapsSticker}
-                        onChange={handleAmenityChange}
-                      />
-                      <AmenityItem
-                        name="expresswayGadget"
-                        label="Expressway Gadget"
-                        value={amenities.expresswayGadget}
-                        onChange={handleAmenityChange}
-                      />
-                      <AmenityItem
-                        name="stapler"
-                        label="Stapler"
-                        value={amenities.stapler}
-                        onChange={handleAmenityChange}
-                      />
-                      <AmenityItem
-                        name="magazine"
-                        label="Magazine"
-                        value={amenities.magazine}
-                        onChange={handleAmenityChange}
-                      />
-                      <AmenityItem
-                        name="menu"
-                        label="Menu"
-                        value={amenities.menu}
-                        onChange={handleAmenityChange}
-                      />
-                      <AmenityItem
-                        name="spareWheel"
-                        label="Spare Wheel"
-                        value={amenities.spareWheel}
-                        onChange={handleAmenityChange}
-                      />
-                      <AmenityItem
-                        name="lifeSaver"
-                        label="Life Saver"
-                        value={amenities.lifeSaver}
-                        onChange={handleAmenityChange}
-                      />
-                      <AmenityItem
-                        name="fireExtinguisher"
-                        label="Fire Extinguisher"
-                        value={amenities.fireExtinguisher}
-                        onChange={handleAmenityChange}
-                      />
-                      <AmenityItem
-                        name="firstAidBox"
-                        label="First Aid Box"
-                        value={amenities.firstAidBox}
-                        onChange={handleAmenityChange}
-                      />
-                      <AmenityItem
-                        name="wheelSpanner"
-                        label="Wheel Spanner"
-                        value={amenities.wheelSpanner}
-                        onChange={handleAmenityChange}
-                      />
-                      <AmenityItem
-                        name="jack"
-                        label="Jack"
-                        value={amenities.jack}
-                        onChange={handleAmenityChange}
-                      />
-                    </Grid>
-                  </CardContent>
-                </Card>
-              </Grid>
+                {/* Amenities */}
+                <Paper sx={{ p: 3, mt: 3 }}>
+                  <Typography variant="h6" gutterBottom fontWeight="medium">
+                    Vehicle Amenities
+                  </Typography>
 
-              {/* Submit Button */}
-              <Grid item xs={12}>
-                <Box display="flex" justifyContent="flex-end" gap={2}>
-                  <Button
-                    variant="outlined"
-                    onClick={handleBack}
-                    disabled={loading}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    type="submit"
-                    variant="contained"
-                    startIcon={
-                      loading ? <CircularProgress size={20} /> : <SaveIcon />
-                    }
-                    disabled={loading}
-                  >
-                    {loading ? "Adding Vehicle..." : "Add Vehicle"}
-                  </Button>
-                </Box>
+                  {Object.entries(amenities).map(([key, value]) => (
+                    <AmenityItem
+                      key={key}
+                      name={key}
+                      label={key
+                        .replace(/([A-Z])/g, " $1")
+                        .replace(/^./, (str) => str.toUpperCase())}
+                      value={value}
+                      onChange={handleAmenityChange}
+                    />
+                  ))}
+                </Paper>
               </Grid>
             </Grid>
+
+            {/* Submit Button */}
+            <Box sx={{ mt: 4, display: "flex", gap: 2 }}>
+              <Button
+                type="submit"
+                variant="contained"
+                size="large"
+                startIcon={<SaveIcon />}
+                disabled={saving}
+                sx={{ minWidth: 150 }}
+              >
+                {saving ? "Updating..." : "Update Vehicle"}
+              </Button>
+              <Button
+                variant="outlined"
+                size="large"
+                onClick={handleBack}
+                disabled={saving}
+              >
+                Cancel
+              </Button>
+            </Box>
           </form>
         </Box>
       </DashboardLayout>

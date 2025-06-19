@@ -39,6 +39,7 @@ import ProtectedRoute from "../../components/ProtectedRoute";
 import DashboardLayout from "../../components/DashboardLayout";
 import { format, isBefore, addDays } from "date-fns";
 import { auth } from "../../lib/firebase";
+import { getLatestOdometerReading } from "../../utils/serviceHelpers";
 
 /**
  * Safely format a date that could be a Firebase Timestamp or JavaScript Date
@@ -138,6 +139,47 @@ const safeToDate = (dateValue) => {
  */
 function VehicleCard({ vehicle, onEdit, onDelete, onAnalytics, onReports }) {
   const [anchorEl, setAnchorEl] = useState(null);
+  const [currentOdometer, setCurrentOdometer] = useState(null);
+  const [serviceStatus, setServiceStatus] = useState(null);
+
+  // Fetch current odometer and calculate service status
+  useEffect(() => {
+    const fetchServiceStatus = async () => {
+      if (vehicle.nextServiceDue) {
+        const latestOdometer = await getLatestOdometerReading(vehicle.id);
+        setCurrentOdometer(latestOdometer);
+
+        if (latestOdometer && vehicle.nextServiceDue) {
+          const kmUntilService = vehicle.nextServiceDue - latestOdometer;
+
+          if (kmUntilService <= 0) {
+            setServiceStatus({
+              type: "overdue",
+              message: `Service overdue by ${Math.abs(kmUntilService)} km`,
+              severity: "error",
+              kmUntilService,
+            });
+          } else if (kmUntilService <= 1000) {
+            setServiceStatus({
+              type: "due_soon",
+              message: `Service due in ${kmUntilService} km`,
+              severity: kmUntilService <= 500 ? "warning" : "info",
+              kmUntilService,
+            });
+          } else {
+            setServiceStatus({
+              type: "good",
+              message: `Next service in ${kmUntilService} km`,
+              severity: "success",
+              kmUntilService,
+            });
+          }
+        }
+      }
+    };
+
+    fetchServiceStatus();
+  }, [vehicle.id, vehicle.nextServiceDue]);
 
   const handleMenuOpen = (event) => {
     setAnchorEl(event.currentTarget);
@@ -246,6 +288,39 @@ function VehicleCard({ vehicle, onEdit, onDelete, onAnalytics, onReports }) {
         <Typography variant="body2" color="text.secondary">
           Inspection: {safeFormatDate(vehicle.inspectionExpiry)}
         </Typography>
+
+        {/* Service Status */}
+        {serviceStatus && (
+          <Box sx={{ mt: 1 }}>
+            <Chip
+              icon={serviceStatus.severity === "error" ? <WarningIcon /> : null}
+              label={serviceStatus.message}
+              color={serviceStatus.severity}
+              size="small"
+              sx={{
+                fontSize: "0.7rem",
+                height: "auto",
+                "& .MuiChip-label": {
+                  whiteSpace: "normal",
+                  lineHeight: 1.2,
+                  py: 0.5,
+                },
+              }}
+            />
+          </Box>
+        )}
+
+        {currentOdometer && (
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ mt: 1, display: "block" }}
+          >
+            Current: {currentOdometer.toLocaleString()} km
+            {vehicle.nextServiceDue &&
+              ` | Due: ${vehicle.nextServiceDue.toLocaleString()} km`}
+          </Typography>
+        )}
       </CardContent>
 
       <Menu
@@ -304,11 +379,24 @@ export default function VehiclesPage() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
 
   const router = useRouter();
 
   useEffect(() => {
     fetchVehicles();
+
+    // Check for success message from URL params
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get("updated") === "true") {
+      setSuccessMessage("Vehicle updated successfully!");
+      // Clear the URL parameter
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, "", newUrl);
+
+      // Clear message after 5 seconds
+      setTimeout(() => setSuccessMessage(""), 5000);
+    }
   }, []);
 
   useEffect(() => {
@@ -388,7 +476,7 @@ export default function VehiclesPage() {
    * @param {Object} vehicle - Vehicle to edit
    */
   const handleEdit = (vehicle) => {
-    router.push(`/vehicles/${vehicle.id}`);
+    router.push(`/vehicles/edit/${vehicle.id}`);
   };
 
   /**
@@ -497,6 +585,16 @@ export default function VehiclesPage() {
           {error && (
             <Alert severity="error" sx={{ mb: 3 }}>
               {error}
+            </Alert>
+          )}
+
+          {successMessage && (
+            <Alert
+              severity="success"
+              sx={{ mb: 3 }}
+              onClose={() => setSuccessMessage("")}
+            >
+              {successMessage}
             </Alert>
           )}
 

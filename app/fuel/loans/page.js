@@ -46,7 +46,7 @@ import {
 import { db } from "../../../lib/firebase";
 import ProtectedRoute from "../../../components/ProtectedRoute";
 import DashboardLayout from "../../../components/DashboardLayout";
-import { format } from "date-fns";
+import { format, startOfMonth, endOfMonth } from "date-fns";
 import { formatKES } from "../../../utils/exportHelpers";
 
 // Helper function to safely format dates
@@ -69,6 +69,10 @@ const FuelCreditContent = () => {
   const [openDialog, setOpenDialog] = useState(false);
   const [selectedLoan, setSelectedLoan] = useState(null);
   const [anchorEl, setAnchorEl] = useState(null);
+  const [monthlyStats, setMonthlyStats] = useState({
+    currentMonth: { total: 0, count: 0 },
+    previousMonth: { total: 0, count: 0 },
+  });
   const [formData, setFormData] = useState({
     amount: "",
     date: new Date(),
@@ -80,6 +84,42 @@ const FuelCreditContent = () => {
     setMounted(true);
     fetchLoans();
   }, []);
+
+  useEffect(() => {
+    calculateMonthlyStats();
+  }, [loans]);
+
+  const calculateMonthlyStats = () => {
+    const now = new Date();
+    const currentMonthStart = startOfMonth(now);
+    const currentMonthEnd = endOfMonth(now);
+
+    // Previous month
+    const previousMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const previousMonthStart = startOfMonth(previousMonth);
+    const previousMonthEnd = endOfMonth(previousMonth);
+
+    const currentMonthLoans = loans.filter((loan) => {
+      const loanDate = loan.date;
+      return loanDate >= currentMonthStart && loanDate <= currentMonthEnd;
+    });
+
+    const previousMonthLoans = loans.filter((loan) => {
+      const loanDate = loan.date;
+      return loanDate >= previousMonthStart && loanDate <= previousMonthEnd;
+    });
+
+    setMonthlyStats({
+      currentMonth: {
+        total: currentMonthLoans.reduce((sum, loan) => sum + loan.amount, 0),
+        count: currentMonthLoans.length,
+      },
+      previousMonth: {
+        total: previousMonthLoans.reduce((sum, loan) => sum + loan.amount, 0),
+        count: previousMonthLoans.length,
+      },
+    });
+  };
 
   const fetchLoans = async () => {
     try {
@@ -251,7 +291,113 @@ const FuelCreditContent = () => {
           </Alert>
         )}
 
-        {/* Summary Cards */}
+        {/* Monthly Summary Section */}
+        <Paper sx={{ p: 3, mb: 4 }}>
+          <Typography variant="h5" fontWeight="bold" gutterBottom>
+            Monthly Summary - {format(new Date(), "MMMM yyyy")}
+          </Typography>
+
+          <Grid container spacing={3}>
+            {/* Current Month */}
+            <Grid item xs={12} md={3}>
+              <Card sx={{ height: "100%", bgcolor: "primary.50" }}>
+                <CardContent>
+                  <Typography color="text.secondary" gutterBottom>
+                    This Month Credits
+                  </Typography>
+                  <Typography variant="h4" component="div" color="primary.main">
+                    {formatKES(monthlyStats.currentMonth.total)}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {monthlyStats.currentMonth.count} transaction
+                    {monthlyStats.currentMonth.count !== 1 ? "s" : ""}
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            {/* Previous Month */}
+            <Grid item xs={12} md={3}>
+              <Card sx={{ height: "100%" }}>
+                <CardContent>
+                  <Typography color="text.secondary" gutterBottom>
+                    Last Month Credits
+                  </Typography>
+                  <Typography variant="h4" component="div">
+                    {formatKES(monthlyStats.previousMonth.total)}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {monthlyStats.previousMonth.count} transaction
+                    {monthlyStats.previousMonth.count !== 1 ? "s" : ""}
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            {/* Month-over-Month Change */}
+            <Grid item xs={12} md={3}>
+              <Card sx={{ height: "100%" }}>
+                <CardContent>
+                  <Typography color="text.secondary" gutterBottom>
+                    Month-over-Month
+                  </Typography>
+                  <Typography
+                    variant="h4"
+                    component="div"
+                    color={
+                      monthlyStats.currentMonth.total >
+                      monthlyStats.previousMonth.total
+                        ? "error.main"
+                        : "success.main"
+                    }
+                  >
+                    {monthlyStats.previousMonth.total > 0
+                      ? (
+                          ((monthlyStats.currentMonth.total -
+                            monthlyStats.previousMonth.total) /
+                            monthlyStats.previousMonth.total) *
+                          100
+                        ).toFixed(1)
+                      : monthlyStats.currentMonth.total > 0
+                      ? "100"
+                      : "0"}
+                    %
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {monthlyStats.currentMonth.total >
+                    monthlyStats.previousMonth.total
+                      ? "Increase"
+                      : "Decrease"}
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            {/* Average per Transaction */}
+            <Grid item xs={12} md={3}>
+              <Card sx={{ height: "100%" }}>
+                <CardContent>
+                  <Typography color="text.secondary" gutterBottom>
+                    Avg per Transaction
+                  </Typography>
+                  <Typography variant="h4" component="div" color="info.main">
+                    {formatKES(
+                      monthlyStats.currentMonth.count > 0
+                        ? monthlyStats.currentMonth.total /
+                            monthlyStats.currentMonth.count
+                        : 0
+                    )}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    This month average
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+          </Grid>
+        </Paper>
+
+        {/* All-Time Summary Cards */}
         <Grid container spacing={3} sx={{ mb: 4 }}>
           <Grid item xs={12} md={6}>
             <Card>
@@ -269,7 +415,7 @@ const FuelCreditContent = () => {
             <Card>
               <CardContent>
                 <Typography color="text.secondary" gutterBottom>
-                  Total Amount
+                  Total Amount (All Time)
                 </Typography>
                 <Typography variant="h4" component="div">
                   {formatKES(loans.reduce((sum, loan) => sum + loan.amount, 0))}

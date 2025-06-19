@@ -21,6 +21,8 @@ import {
   Grid,
   Card,
   CardContent,
+  FormControlLabel,
+  Checkbox,
 } from "@mui/material";
 import { DataGrid } from "@mui/x-data-grid";
 import {
@@ -35,6 +37,7 @@ import {
   getDocs,
   query,
   orderBy,
+  getDoc,
 } from "firebase/firestore";
 import { db } from "../../lib/firebase";
 import ProtectedRoute from "../../components/ProtectedRoute";
@@ -42,6 +45,11 @@ import DashboardLayout from "../../components/DashboardLayout";
 import { format, startOfMonth, endOfMonth } from "date-fns";
 import { formatKES } from "../../utils/exportHelpers";
 import { auth } from "../../lib/firebase";
+import {
+  calculateNextServiceDue,
+  getLatestOdometerReading,
+} from "../../utils/serviceHelpers";
+import { doc, updateDoc } from "firebase/firestore";
 
 /**
  * Maintenance records page component
@@ -70,6 +78,8 @@ export default function MaintenanceRecordsPage() {
     cost: "",
     serviceProvider: "",
     notes: "",
+    isService: false,
+    updateServiceSchedule: false,
     createdBy: auth.currentUser?.uid || "",
   });
 
@@ -246,6 +256,53 @@ export default function MaintenanceRecordsPage() {
   };
 
   /**
+   * Update service schedule after service completion
+   * @param {string} vehicleId - Vehicle ID
+   */
+  const updateServiceSchedule = async (vehicleId) => {
+    try {
+      // Get the vehicle's current service interval
+      const vehicleRef = doc(db, "vehicles", vehicleId);
+      const vehicleDoc = await getDoc(vehicleRef);
+
+      if (!vehicleDoc.exists()) {
+        console.warn("Vehicle not found for service schedule update");
+        return;
+      }
+
+      const vehicleData = vehicleDoc.data();
+      const serviceInterval = vehicleData.serviceInterval || 10000;
+
+      // Get the latest odometer reading
+      const latestOdometer = await getLatestOdometerReading(vehicleId);
+
+      if (latestOdometer) {
+        // Calculate next service due
+        const nextServiceDue = calculateNextServiceDue(
+          latestOdometer,
+          serviceInterval
+        );
+
+        // Update the vehicle document
+        await updateDoc(vehicleRef, {
+          nextServiceDue: nextServiceDue,
+          lastServiceOdometer: latestOdometer,
+          lastServiceDate: new Date(),
+          updatedAt: new Date(),
+        });
+
+        console.log(
+          `Service schedule updated for vehicle ${vehicleId}: Next service due at ${nextServiceDue}km`
+        );
+      } else {
+        console.warn("No odometer reading found to calculate next service");
+      }
+    } catch (error) {
+      console.error("Error updating service schedule:", error);
+    }
+  };
+
+  /**
    * Handle form submission
    * @param {Event} event - Form submit event
    */
@@ -267,10 +324,17 @@ export default function MaintenanceRecordsPage() {
         description: formData.description,
         cost: parseFloat(formData.cost),
         serviceProvider: formData.serviceProvider,
+        notes: formData.notes,
+        isService: formData.isService,
         createdAt: new Date(),
       };
 
       await addDoc(collection(db, "maintenanceRecords"), maintenanceData);
+
+      // Update service schedule if this is a service
+      if (formData.isService && formData.updateServiceSchedule) {
+        await updateServiceSchedule(formData.vehicleId);
+      }
 
       // Reset form and close dialog
       setFormData({
@@ -280,6 +344,8 @@ export default function MaintenanceRecordsPage() {
         cost: "",
         serviceProvider: "",
         notes: "",
+        isService: false,
+        updateServiceSchedule: false,
         createdBy: auth.currentUser?.uid || "",
       });
       setDialogOpen(false);
@@ -653,6 +719,35 @@ export default function MaintenanceRecordsPage() {
                       value={formData.serviceProvider}
                       onChange={handleInputChange}
                       placeholder="e.g., AA Kenya, Quick Fix Garage"
+                    />
+                  </Grid>
+                  <Grid item xs={12}>
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={formData.isService}
+                          onChange={(e) =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              isService: e.target.checked,
+                              updateServiceSchedule: e.target.checked,
+                            }))
+                          }
+                        />
+                      }
+                      label="This is a scheduled service (will update service tracking)"
+                    />
+                  </Grid>
+                  <Grid item xs={12}>
+                    <TextField
+                      fullWidth
+                      name="notes"
+                      label="Notes"
+                      multiline
+                      rows={2}
+                      value={formData.notes}
+                      onChange={handleInputChange}
+                      placeholder="Additional notes or observations..."
                     />
                   </Grid>
                 </Grid>
