@@ -7,32 +7,156 @@ import {
 } from "date-fns";
 
 /**
- * Calculate kilometers between fueling records
+ * Calculate kilometers between fueling records with proper efficiency calculation
  * @param {Array} fuelRecords - Array of fuel records sorted by date
- * @returns {Array} Array of records with distance between fueling
+ * @returns {Array} Array of records with distance between fueling and efficiency
  */
 export const calculateDistanceBetweenFueling = (fuelRecords = []) => {
   if (!fuelRecords.length) return [];
 
-  // Sort records by date to ensure correct order
+  // Debug: Log input data
+  console.log(
+    "calculateDistanceBetweenFueling input:",
+    fuelRecords.slice(0, 2)
+  );
+
+  // Sort records by date to ensure correct order (oldest first for proper calculation)
   const sortedRecords = [...fuelRecords].sort((a, b) => a.date - b.date);
 
-  return sortedRecords.map((record, index) => {
+  const result = sortedRecords.map((record, index) => {
+    // Ensure we have valid data
+    const liters = parseFloat(record.liters) || 0;
+    const odometerReading = parseFloat(record.odometerReading) || null;
+    const cost = parseFloat(record.cost) || 0;
+
+    // Check if current record is a full tank (handle different field names)
+    const isFullTank =
+      record.isFullTank === true ||
+      record.fillType === "full" ||
+      record.isFullTank === "true" ||
+      record.fillType === "Full Tank" ||
+      // Default to true if no fill type is specified (backward compatibility)
+      (record.isFullTank === undefined && record.fillType === undefined);
+
+    // First record - no previous record to calculate distance from
     if (index === 0) {
+      console.log("First record:", {
+        id: record.id,
+        isFullTank,
+        fillType: record.fillType,
+        isFullTankField: record.isFullTank,
+        hasOdometer: !!odometerReading,
+        odometerReading,
+      });
       return {
         ...record,
+        liters,
+        odometerReading,
+        cost,
         distanceSinceLastFuel: 0,
+        fuelEfficiency: null,
+        isIncomplete: !odometerReading,
+        isPartialFill: !isFullTank,
+        efficiencyStatus: !odometerReading ? "incomplete" : "no_previous_data",
       };
     }
 
     const previousRecord = sortedRecords[index - 1];
-    const distance = record.odometerReading - previousRecord.odometerReading;
+    const previousOdometerReading =
+      parseFloat(previousRecord.odometerReading) || null;
+
+    // Check if current record has odometer reading
+    const hasCurrentOdometer = odometerReading && odometerReading > 0;
+    const hasPreviousOdometer =
+      previousOdometerReading && previousOdometerReading > 0;
+
+    // Debug: Log record processing
+    console.log("Processing record:", {
+      id: record.id,
+      date: record.date,
+      liters,
+      odometerReading,
+      isFullTank,
+      fillType: record.fillType,
+      isFullTankField: record.isFullTank,
+      hasCurrentOdometer,
+      hasPreviousOdometer,
+      previousOdometer: previousOdometerReading,
+    });
+
+    // If either record is missing odometer reading, mark as incomplete
+    if (!hasCurrentOdometer || !hasPreviousOdometer) {
+      return {
+        ...record,
+        liters,
+        odometerReading,
+        cost,
+        distanceSinceLastFuel: null,
+        fuelEfficiency: null,
+        isIncomplete: true,
+        isPartialFill: !isFullTank,
+        efficiencyStatus: !hasCurrentOdometer
+          ? "missing_current_odometer"
+          : "missing_previous_odometer",
+      };
+    }
+
+    // Calculate distance between fueling
+    const distance = odometerReading - previousOdometerReading;
+
+    // Validate distance calculation
+    if (distance <= 0) {
+      console.log("Invalid distance:", {
+        current: odometerReading,
+        previous: previousOdometerReading,
+        distance,
+      });
+      return {
+        ...record,
+        liters,
+        odometerReading,
+        cost,
+        distanceSinceLastFuel: null,
+        fuelEfficiency: null,
+        isIncomplete: true,
+        isPartialFill: !isFullTank,
+        efficiencyStatus: "invalid_distance",
+      };
+    }
+
+    // Calculate efficiency (km/L) - only for full tank records
+    let efficiency = null;
+    if (isFullTank && liters > 0) {
+      efficiency = distance / liters;
+      console.log("Calculated efficiency:", {
+        distance,
+        liters,
+        efficiency,
+      });
+    } else {
+      console.log("No efficiency calculated:", {
+        isFullTank,
+        liters,
+        reason: !isFullTank ? "not_full_tank" : "no_liters",
+      });
+    }
 
     return {
       ...record,
-      distanceSinceLastFuel: distance > 0 ? distance : 0,
+      liters,
+      odometerReading,
+      cost,
+      distanceSinceLastFuel: distance,
+      fuelEfficiency: efficiency,
+      isIncomplete: false,
+      isPartialFill: !isFullTank,
+      efficiencyStatus: isFullTank ? "complete" : "partial_fill",
     };
   });
+
+  // Debug: Log final result
+  console.log("calculateDistanceBetweenFueling result:", result.slice(0, 2));
+  return result;
 };
 
 /**
@@ -56,37 +180,63 @@ export const calculateVehicleAnalytics = (
   }, 0);
   const fuelUps = fuelRecords.length;
 
-  // Calculate distances between fueling
+  // Calculate distances between fueling with efficiency
   const recordsWithDistance = calculateDistanceBetweenFueling(fuelRecords);
-  const totalDistance = recordsWithDistance.reduce(
+
+  // Calculate total distance from complete records only
+  const completeRecords = recordsWithDistance.filter(
+    (record) => !record.isIncomplete
+  );
+  const totalDistance = completeRecords.reduce(
     (sum, record) => sum + (record.distanceSinceLastFuel || 0),
     0
   );
 
-  // Calculate average distance between fueling
+  // Calculate average distance between fueling (only from complete records)
   const averageDistanceBetweenFueling =
-    fuelUps > 1 ? totalDistance / (fuelUps - 1) : 0;
+    completeRecords.length > 1
+      ? totalDistance / (completeRecords.length - 1)
+      : 0;
 
-  // Calculate efficiency for each record
-  const recordsWithEfficiency = recordsWithDistance
-    .map((record) => {
-      const efficiency =
-        record.liters > 0 ? record.distanceSinceLastFuel / record.liters : 0;
-      return {
-        ...record,
-        calculatedEfficiency: efficiency,
-      };
-    })
-    .filter((record) => record.calculatedEfficiency > 0);
+  // Calculate efficiency metrics from complete FULL TANK records only
+  const recordsWithEfficiency = completeRecords.filter(
+    (record) =>
+      !record.isPartialFill &&
+      record.fuelEfficiency &&
+      record.fuelEfficiency > 0
+  );
 
   // Calculate average efficiency
   const averageEfficiency =
     recordsWithEfficiency.length > 0
       ? recordsWithEfficiency.reduce(
-          (sum, record) => sum + record.calculatedEfficiency,
+          (sum, record) => sum + record.fuelEfficiency,
           0
         ) / recordsWithEfficiency.length
       : 0;
+
+  // Calculate best and worst efficiency
+  const bestEfficiency =
+    recordsWithEfficiency.length > 0
+      ? Math.max(...recordsWithEfficiency.map((r) => r.fuelEfficiency))
+      : 0;
+
+  const worstEfficiency =
+    recordsWithEfficiency.length > 0
+      ? Math.min(...recordsWithEfficiency.map((r) => r.fuelEfficiency))
+      : 0;
+
+  // Count incomplete and partial fill records
+  const incompleteRecords = recordsWithDistance.filter(
+    (record) => record.isIncomplete
+  );
+  const partialFillRecords = recordsWithDistance.filter(
+    (record) => record.isPartialFill
+  );
+  const incompleteCount = incompleteRecords.length;
+  const partialFillCount = partialFillRecords.length;
+  const fullTankCount =
+    recordsWithDistance.length - incompleteCount - partialFillCount;
 
   // Maintenance metrics
   const totalMaintenanceCost = maintenanceRecords.reduce(
@@ -113,6 +263,12 @@ export const calculateVehicleAnalytics = (
       averageDistanceBetweenFueling.toFixed(0)
     ),
     averageEfficiency: Number(averageEfficiency.toFixed(2)),
+    bestEfficiency: Number(bestEfficiency.toFixed(2)),
+    worstEfficiency: Number(worstEfficiency.toFixed(2)),
+    completeRecordsCount: completeRecords.length,
+    incompleteRecordsCount: incompleteCount,
+    fullTankCount: fullTankCount,
+    partialFillCount: partialFillCount,
 
     // Maintenance metrics
     totalMaintenanceCost: Number(totalMaintenanceCost.toFixed(2)),
@@ -134,7 +290,10 @@ export const calculateVehicleAnalytics = (
 export const groupFuelRecordsByMonth = (fuelRecords = []) => {
   const monthlyData = {};
 
-  fuelRecords.forEach((record) => {
+  // Calculate distances and efficiency for all records
+  const recordsWithDistance = calculateDistanceBetweenFueling(fuelRecords);
+
+  recordsWithDistance.forEach((record) => {
     if (!record.date) return;
 
     const monthKey = format(record.date, "yyyy-MM");
@@ -147,6 +306,10 @@ export const groupFuelRecordsByMonth = (fuelRecords = []) => {
         totalDistance: 0,
         averageEfficiency: 0,
         efficiencyCount: 0,
+        completeRecords: 0,
+        incompleteRecords: 0,
+        fullTankRecords: 0,
+        partialFillRecords: 0,
         records: [],
       };
     }
@@ -154,9 +317,26 @@ export const groupFuelRecordsByMonth = (fuelRecords = []) => {
     monthlyData[monthKey].totalLiters += record.liters || 0;
     monthlyData[monthKey].totalCost += record.cost || 0;
     monthlyData[monthKey].fuelUps += 1;
-    monthlyData[monthKey].totalDistance += record.distanceSinceLastFuel || 0;
 
-    if (record.fuelEfficiency) {
+    if (!record.isIncomplete && record.distanceSinceLastFuel) {
+      monthlyData[monthKey].totalDistance += record.distanceSinceLastFuel;
+      monthlyData[monthKey].completeRecords += 1;
+
+      if (!record.isPartialFill) {
+        monthlyData[monthKey].fullTankRecords += 1;
+      } else {
+        monthlyData[monthKey].partialFillRecords += 1;
+      }
+    } else {
+      monthlyData[monthKey].incompleteRecords += 1;
+    }
+
+    if (
+      !record.isIncomplete &&
+      !record.isPartialFill &&
+      record.fuelEfficiency &&
+      record.fuelEfficiency > 0
+    ) {
       monthlyData[monthKey].averageEfficiency += record.fuelEfficiency;
       monthlyData[monthKey].efficiencyCount += 1;
     }
@@ -186,17 +366,15 @@ export const groupFuelRecordsByMonth = (fuelRecords = []) => {
  * @returns {Object} Efficiency analysis with trends and patterns
  */
 export const analyzeFuelEfficiency = (fuelRecords = []) => {
-  // Calculate efficiency for each record
+  // Calculate efficiency for each record using the improved function
   const recordsWithEfficiency = calculateDistanceBetweenFueling(fuelRecords)
-    .map((record) => {
-      const efficiency =
-        record.liters > 0 ? record.distanceSinceLastFuel / record.liters : 0;
-      return {
-        ...record,
-        calculatedEfficiency: efficiency,
-      };
-    })
-    .filter((record) => record.calculatedEfficiency > 0)
+    .filter(
+      (record) =>
+        !record.isIncomplete &&
+        !record.isPartialFill &&
+        record.fuelEfficiency &&
+        record.fuelEfficiency > 0
+    )
     .sort((a, b) => a.date - b.date);
 
   if (recordsWithEfficiency.length === 0) {
@@ -206,12 +384,14 @@ export const analyzeFuelEfficiency = (fuelRecords = []) => {
       worstEfficiency: 0,
       improvementRate: 0,
       isImproving: false,
-      recommendations: ["Add fuel efficiency data to track performance"],
+      recommendations: [
+        "Add full tank fuel efficiency data to track performance",
+      ],
     };
   }
 
   const efficiencyValues = recordsWithEfficiency.map(
-    (record) => record.calculatedEfficiency
+    (record) => record.fuelEfficiency
   );
   const bestEfficiency = Math.max(...efficiencyValues);
   const worstEfficiency = Math.min(...efficiencyValues);
@@ -224,12 +404,10 @@ export const analyzeFuelEfficiency = (fuelRecords = []) => {
   const oldRecords = recordsWithEfficiency.slice(0, 6); // First 6 records
 
   const recentAverage =
-    recentRecords.reduce(
-      (sum, record) => sum + record.calculatedEfficiency,
-      0
-    ) / recentRecords.length;
+    recentRecords.reduce((sum, record) => sum + record.fuelEfficiency, 0) /
+    recentRecords.length;
   const oldAverage =
-    oldRecords.reduce((sum, record) => sum + record.calculatedEfficiency, 0) /
+    oldRecords.reduce((sum, record) => sum + record.fuelEfficiency, 0) /
     oldRecords.length;
 
   const improvementRate =
@@ -369,14 +547,36 @@ export const generateFuelConsumptionChartData = (monthlyData) => {
 };
 
 /**
- * Generate efficiency trend chart data
- * @param {Array} fuelRecords - Fuel records with efficiency data
- * @returns {Object} Chart data for efficiency trends
+ * Generate chart data for fuel efficiency trend
+ * @param {Array} fuelRecords - Array of fuel records
+ * @returns {Object} Chart data for efficiency trend
  */
 export const generateEfficiencyTrendData = (fuelRecords) => {
-  const recordsWithEfficiency = fuelRecords
-    .filter((record) => record.fuelEfficiency && record.date)
+  const recordsWithEfficiency = calculateDistanceBetweenFueling(fuelRecords)
+    .filter(
+      (record) =>
+        !record.isIncomplete &&
+        !record.isPartialFill &&
+        record.fuelEfficiency &&
+        record.fuelEfficiency > 0
+    )
     .sort((a, b) => a.date - b.date);
+
+  if (recordsWithEfficiency.length === 0) {
+    return {
+      labels: [],
+      datasets: [
+        {
+          label: "Fuel Efficiency (km/L)",
+          data: [],
+          borderColor: "rgba(75, 192, 192, 1)",
+          backgroundColor: "rgba(75, 192, 192, 0.2)",
+          tension: 0.1,
+          fill: true,
+        },
+      ],
+    };
+  }
 
   return {
     labels: recordsWithEfficiency.map((record) =>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, use } from "react";
+import { useState, useEffect, use, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
   Box,
@@ -148,6 +148,7 @@ export default function VehicleAnalyticsPage({ params }) {
   // State management
   const [vehicle, setVehicle] = useState(null);
   const [fuelRecords, setFuelRecords] = useState([]);
+  const [processedFuelRecords, setProcessedFuelRecords] = useState([]);
   const [maintenanceRecords, setMaintenanceRecords] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -169,6 +170,9 @@ export default function VehicleAnalyticsPage({ params }) {
     previousMonthCost: 0,
     currentMonthCost: 0,
     averageDistanceBetweenFueling: 0,
+    fullTankCount: 0,
+    partialFillCount: 0,
+    incompleteRecordsCount: 0,
   });
 
   // Pagination state
@@ -177,16 +181,10 @@ export default function VehicleAnalyticsPage({ params }) {
   const [maintenancePage, setMaintenancePage] = useState(0);
   const [maintenanceRowsPerPage, setMaintenanceRowsPerPage] = useState(10);
 
-  useEffect(() => {
-    if (vehicleId) {
-      fetchVehicleData();
-    }
-  }, [vehicleId, dateRange]);
-
   /**
    * Fetch vehicle data and analytics
    */
-  const fetchVehicleData = async () => {
+  const fetchVehicleData = useCallback(async () => {
     try {
       setLoading(true);
       setError("");
@@ -245,7 +243,13 @@ export default function VehicleAnalyticsPage({ params }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [vehicleId, dateRange]);
+
+  useEffect(() => {
+    if (vehicleId) {
+      fetchVehicleData();
+    }
+  }, [vehicleId, fetchVehicleData]);
 
   /**
    * Calculate analytics from fuel and maintenance data
@@ -307,6 +311,20 @@ export default function VehicleAnalyticsPage({ params }) {
     );
     const averageDistanceBetweenFueling =
       fuel.length > 1 ? totalDistance / (fuel.length - 1) : 0;
+
+    // Debug: Log some sample records to understand the data
+    console.log("Sample fuel records:", fuel.slice(0, 3));
+    console.log(
+      "Processed records with distance:",
+      recordsWithDistance.slice(0, 3)
+    );
+    console.log(
+      "Records with efficiency:",
+      recordsWithDistance.filter((r) => r.fuelEfficiency)
+    );
+
+    // Store processed records for table display
+    setProcessedFuelRecords(recordsWithDistance);
 
     const finalAnalytics = {
       ...basicAnalytics,
@@ -923,6 +941,190 @@ export default function VehicleAnalyticsPage({ params }) {
             </Grid>
           </Grid>
 
+          {/* Fuel Efficiency Summary */}
+          <Paper sx={{ p: 3, mb: 3 }}>
+            <Typography variant="h6" gutterBottom>
+              Fuel Efficiency Summary
+            </Typography>
+            <Grid container spacing={3}>
+              <Grid item xs={12} sm={6} md={3}>
+                <Box textAlign="center">
+                  <Typography variant="h4" color="primary" fontWeight="bold">
+                    {safeNumber(analytics.averageEfficiency, 0).toFixed(2)}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Average Efficiency (km/L)
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Full tank records only
+                  </Typography>
+                </Box>
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <Box textAlign="center">
+                  <Typography
+                    variant="h4"
+                    color="success.main"
+                    fontWeight="bold"
+                  >
+                    {safeNumber(analytics.bestEfficiency, 0).toFixed(2)}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Best Efficiency (km/L)
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Full tank records only
+                  </Typography>
+                </Box>
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <Box textAlign="center">
+                  <Typography
+                    variant="h4"
+                    color="warning.main"
+                    fontWeight="bold"
+                  >
+                    {safeNumber(analytics.worstEfficiency, 0).toFixed(2)}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Worst Efficiency (km/L)
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Full tank records only
+                  </Typography>
+                </Box>
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <Box textAlign="center">
+                  <Typography variant="h4" color="info.main" fontWeight="bold">
+                    {analytics.fullTankCount || 0}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Full Tank Records
+                  </Typography>
+                  {analytics.partialFillCount > 0 && (
+                    <Typography variant="caption" color="warning.main">
+                      {analytics.partialFillCount} partial fills excluded
+                    </Typography>
+                  )}
+                </Box>
+              </Grid>
+            </Grid>
+
+            {/* Data Quality Information */}
+            <Box mt={3}>
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={6}>
+                  <Paper variant="outlined" sx={{ p: 2 }}>
+                    <Typography variant="subtitle2" gutterBottom>
+                      Data Quality Summary
+                    </Typography>
+                    <Box display="flex" justifyContent="space-between" mb={1}>
+                      <Typography variant="body2">
+                        Total Fuel Records:
+                      </Typography>
+                      <Typography variant="body2" fontWeight="bold">
+                        {analytics.fuelUps || 0}
+                      </Typography>
+                    </Box>
+                    <Box display="flex" justifyContent="space-between" mb={1}>
+                      <Typography variant="body2">
+                        Full Tank Records:
+                      </Typography>
+                      <Typography
+                        variant="body2"
+                        fontWeight="bold"
+                        color="success.main"
+                      >
+                        {analytics.fullTankCount || 0}
+                      </Typography>
+                    </Box>
+                    <Box display="flex" justifyContent="space-between" mb={1}>
+                      <Typography variant="body2">
+                        Partial Fill Records:
+                      </Typography>
+                      <Typography
+                        variant="body2"
+                        fontWeight="bold"
+                        color="warning.main"
+                      >
+                        {analytics.partialFillCount || 0}
+                      </Typography>
+                    </Box>
+                    <Box display="flex" justifyContent="space-between">
+                      <Typography variant="body2">
+                        Incomplete Records:
+                      </Typography>
+                      <Typography
+                        variant="body2"
+                        fontWeight="bold"
+                        color="error.main"
+                      >
+                        {analytics.incompleteRecordsCount || 0}
+                      </Typography>
+                    </Box>
+                  </Paper>
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <Paper variant="outlined" sx={{ p: 2 }}>
+                    <Typography variant="subtitle2" gutterBottom>
+                      Efficiency Calculation
+                    </Typography>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{ mb: 1 }}
+                    >
+                      • Only full tank records are used for efficiency
+                      calculations
+                    </Typography>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{ mb: 1 }}
+                    >
+                      • Partial fills are excluded to ensure accurate results
+                    </Typography>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{ mb: 1 }}
+                    >
+                      • Records missing odometer readings are marked as
+                      incomplete
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      • Efficiency = Distance (km) ÷ Liters consumed
+                    </Typography>
+                  </Paper>
+                </Grid>
+              </Grid>
+            </Box>
+
+            {/* Warnings */}
+            {(analytics.incompleteRecordsCount > 0 ||
+              analytics.partialFillCount > 0) && (
+              <Box mt={2}>
+                {analytics.incompleteRecordsCount > 0 && (
+                  <Alert severity="warning" sx={{ mb: 1 }}>
+                    ⚠️ {analytics.incompleteRecordsCount} fuel record(s) are
+                    missing odometer readings and cannot be used for efficiency
+                    calculations. Please update these records with odometer
+                    readings for accurate efficiency tracking.
+                  </Alert>
+                )}
+                {analytics.partialFillCount > 0 && (
+                  <Alert severity="info">
+                    ℹ️ {analytics.partialFillCount} partial fill record(s) are
+                    excluded from efficiency calculations to ensure accurate
+                    results. Only full tank records are used for efficiency
+                    analysis.
+                  </Alert>
+                )}
+              </Box>
+            )}
+          </Paper>
+
           {/* Tabs for detailed data */}
           <Paper sx={{ mb: 3 }}>
             <Tabs
@@ -945,73 +1147,149 @@ export default function VehicleAnalyticsPage({ params }) {
                     <TableCell>Date</TableCell>
                     <TableCell align="right">Liters</TableCell>
                     <TableCell align="right">Cost</TableCell>
-                    <TableCell align="right">km/L</TableCell>
+                    <TableCell align="right">Efficiency (km/L)</TableCell>
                     <TableCell align="right">Odometer</TableCell>
                     <TableCell align="right">Distance</TableCell>
                     <TableCell>Station</TableCell>
+                    <TableCell>Fill Type</TableCell>
+                    <TableCell>Status</TableCell>
                     <TableCell>Notes</TableCell>
                     <TableCell align="center">Actions</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {calculateDistanceBetweenFueling(fuelRecords)
+                  {processedFuelRecords
                     .slice(
                       fuelPage * fuelRowsPerPage,
                       fuelPage * fuelRowsPerPage + fuelRowsPerPage
                     )
-                    .map((record) => (
-                      <TableRow key={record.id}>
-                        <TableCell>
-                          {format(record.date, "dd-MM-yyyy")}
-                        </TableCell>
-                        <TableCell align="right">
-                          {record.liters?.toFixed(1)}L
-                        </TableCell>
-                        <TableCell align="right">
-                          {formatKES(record.cost)}
-                        </TableCell>
-                        <TableCell align="right">
-                          {record.fuelEfficiency
-                            ? `${record.fuelEfficiency} km/L`
-                            : "N/A"}
-                        </TableCell>
-                        <TableCell align="right">
-                          {record.odometerReading
-                            ? `${record.odometerReading} km`
-                            : "N/A"}
-                        </TableCell>
-                        <TableCell align="right">
-                          {record.distanceSinceLastFuel
-                            ? `${record.distanceSinceLastFuel} km`
-                            : "N/A"}
-                        </TableCell>
-                        <TableCell>{record.station || "N/A"}</TableCell>
-                        <TableCell>
-                          {record.notes ? (
-                            <Tooltip title={record.notes}>
+                    .map((record) => {
+                      // Debug: Log individual record data
+                      console.log("Table record:", {
+                        id: record.id,
+                        date: record.date,
+                        liters: record.liters,
+                        odometerReading: record.odometerReading,
+                        distanceSinceLastFuel: record.distanceSinceLastFuel,
+                        fuelEfficiency: record.fuelEfficiency,
+                        isPartialFill: record.isPartialFill,
+                        isIncomplete: record.isIncomplete,
+                        efficiencyStatus: record.efficiencyStatus,
+                        isFullTank: record.isFullTank,
+                        fillType: record.fillType,
+                      });
+
+                      return (
+                        <TableRow key={record.id}>
+                          <TableCell>
+                            {format(record.date, "dd-MM-yyyy")}
+                          </TableCell>
+                          <TableCell align="right">
+                            {record.liters?.toFixed(1)}L
+                          </TableCell>
+                          <TableCell align="right">
+                            {formatKES(record.cost)}
+                          </TableCell>
+                          <TableCell align="right">
+                            {record.fuelEfficiency ? (
+                              <Typography variant="body2" fontWeight="bold">
+                                {record.fuelEfficiency.toFixed(2)} km/L
+                              </Typography>
+                            ) : (
+                              <Typography
+                                variant="body2"
+                                color="text.secondary"
+                              >
+                                N/A
+                              </Typography>
+                            )}
+                          </TableCell>
+                          <TableCell align="right">
+                            {record.odometerReading
+                              ? `${record.odometerReading.toLocaleString()} km`
+                              : "N/A"}
+                          </TableCell>
+                          <TableCell align="right">
+                            {record.distanceSinceLastFuel !== null ? (
+                              `${record.distanceSinceLastFuel.toLocaleString()} km`
+                            ) : (
+                              <Typography
+                                variant="body2"
+                                color="text.secondary"
+                              >
+                                N/A
+                              </Typography>
+                            )}
+                          </TableCell>
+                          <TableCell>{record.station || "N/A"}</TableCell>
+                          <TableCell>
+                            {record.isPartialFill ? (
                               <Chip
-                                label="View"
+                                label="Partial"
                                 size="small"
+                                color="warning"
                                 variant="outlined"
                               />
-                            </Tooltip>
-                          ) : (
-                            "N/A"
-                          )}
-                        </TableCell>
-                        <TableCell align="center">
-                          <IconButton size="small">
-                            <ViewIcon />
-                          </IconButton>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                            ) : (
+                              <Chip
+                                label="Full Tank"
+                                size="small"
+                                color="success"
+                                variant="filled"
+                              />
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {record.isIncomplete ? (
+                              <Chip
+                                label="Incomplete"
+                                size="small"
+                                color="error"
+                                variant="outlined"
+                              />
+                            ) : record.isPartialFill ? (
+                              <Chip
+                                label="Partial Fill"
+                                size="small"
+                                color="warning"
+                                variant="outlined"
+                              />
+                            ) : (
+                              <Chip
+                                label="Complete"
+                                size="small"
+                                color="success"
+                                variant="outlined"
+                              />
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {record.notes ? (
+                              <Tooltip title={record.notes}>
+                                <Chip
+                                  label="View"
+                                  size="small"
+                                  variant="outlined"
+                                />
+                              </Tooltip>
+                            ) : (
+                              "N/A"
+                            )}
+                          </TableCell>
+                          <TableCell align="center">
+                            <IconButton size="small">
+                              <ViewIcon />
+                            </IconButton>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                 </TableBody>
               </Table>
               <TablePagination
                 rowsPerPageOptions={[5, 10, 25]}
                 component="div"
-                count={fuelRecords.length}
+                count={processedFuelRecords.length}
                 rowsPerPage={fuelRowsPerPage}
                 page={fuelPage}
                 onPageChange={(event, newPage) => setFuelPage(newPage)}
