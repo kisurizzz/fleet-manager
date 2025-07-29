@@ -8,6 +8,7 @@ import {
   getDoc,
   doc,
   updateDoc,
+  Timestamp,
 } from "firebase/firestore";
 import { db } from "../../../lib/firebase";
 import { format, startOfMonth, endOfMonth } from "date-fns";
@@ -68,16 +69,46 @@ export const useMaintenanceData = () => {
       const maintenanceList = maintenanceSnapshot.docs.map((doc) => {
         const data = doc.data();
         const vehicle = vehiclesList.find((v) => v.id === data.vehicleId);
+
+        // Handle different date formats safely
+        let dateValue = null;
+        if (data.date) {
+          try {
+            if (typeof data.date.toDate === "function") {
+              // Firebase Timestamp
+              dateValue = data.date.toDate();
+            } else if (data.date instanceof Date) {
+              // Already a Date object
+              dateValue = data.date;
+            } else if (typeof data.date === "string") {
+              // String date
+              dateValue = new Date(data.date);
+            } else if (typeof data.date === "object" && data.date.seconds) {
+              // Firebase Timestamp with seconds (alternative format)
+              dateValue = new Date(data.date.seconds * 1000);
+            } else if (typeof data.date === "number") {
+              // Unix timestamp
+              dateValue = new Date(data.date);
+            }
+
+            // Validate the date is actually valid
+            if (dateValue && isNaN(dateValue.getTime())) {
+              dateValue = null;
+            }
+          } catch (error) {
+            console.warn("Error parsing date for record:", doc.id, error);
+            dateValue = null;
+          }
+        }
+
         return {
           id: doc.id,
           ...data,
-          date: data.date?.toDate(),
+          date: dateValue,
           vehicleName: vehicle
             ? `${vehicle.regNumber} (${vehicle.make} ${vehicle.model})`
             : "Unknown Vehicle",
-          formattedDate: data.date
-            ? format(data.date.toDate(), "dd-MM-yyyy")
-            : "",
+          formattedDate: dateValue ? format(dateValue, "dd-MM-yyyy") : "",
         };
       });
 
@@ -100,10 +131,14 @@ export const useMaintenanceData = () => {
     if (searchTerm) {
       filtered = filtered.filter(
         (record) =>
-          record.vehicleName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          record.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          record.vehicleName
+            ?.toLowerCase()
+            .includes(searchTerm.toLowerCase()) ||
+          record.description
+            ?.toLowerCase()
+            .includes(searchTerm.toLowerCase()) ||
           record.serviceProvider
-            .toLowerCase()
+            ?.toLowerCase()
             .includes(searchTerm.toLowerCase())
       );
     }
@@ -256,10 +291,38 @@ export const useMaintenanceData = () => {
     updateServiceSchedule = false
   ) => {
     try {
-      const recordData = {
+      // Validate recordId is provided
+      if (!recordId) {
+        throw new Error(
+          "Record ID is required for updating maintenance record"
+        );
+      }
+
+      // Ensure all string fields are properly defined to prevent undefined errors
+      // Handle date conversion more robustly
+      let dateValue = new Date();
+      if (maintenanceData.date) {
+        if (
+          maintenanceData.date instanceof Date &&
+          !isNaN(maintenanceData.date.getTime())
+        ) {
+          dateValue = maintenanceData.date;
+        } else if (typeof maintenanceData.date.toDate === "function") {
+          dateValue = maintenanceData.date.toDate();
+        } else {
+          dateValue = new Date(maintenanceData.date);
+        }
+      }
+
+      const recordData = sanitizeForFirestore({
         ...maintenanceData,
-        updatedAt: new Date(),
-      };
+        description: maintenanceData.description || "",
+        serviceProvider: maintenanceData.serviceProvider || "",
+        notes: maintenanceData.notes || "",
+        vehicleId: maintenanceData.vehicleId || "",
+        updatedAt: Timestamp.fromDate(new Date()),
+        date: Timestamp.fromDate(dateValue),
+      });
 
       const recordRef = doc(db, "maintenanceRecords", recordId);
       await updateDoc(recordRef, recordData);
@@ -328,3 +391,21 @@ export const useMaintenanceData = () => {
     updateServiceSchedule,
   };
 };
+
+// Utility to sanitize data for Firestore (replace undefined with null)
+function sanitizeForFirestore(obj) {
+  if (Array.isArray(obj)) {
+    return obj.map(sanitizeForFirestore);
+  } else if (obj && typeof obj === "object") {
+    const sanitized = {};
+    for (const key in obj) {
+      if (obj[key] === undefined) {
+        sanitized[key] = null;
+      } else {
+        sanitized[key] = sanitizeForFirestore(obj[key]);
+      }
+    }
+    return sanitized;
+  }
+  return obj;
+}

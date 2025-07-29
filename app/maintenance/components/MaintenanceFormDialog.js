@@ -92,15 +92,14 @@ export const MaintenanceFormDialog = ({
                 value={formData.date}
                 onChange={handleDateChange}
                 format="dd-MM-yyyy"
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    fullWidth
-                    required
-                    error={!!errors.date}
-                    helperText={errors.date}
-                  />
-                )}
+                slotProps={{
+                  textField: {
+                    fullWidth: true,
+                    required: true,
+                    error: !!errors.date,
+                    helperText: errors.date,
+                  },
+                }}
               />
             </Grid>
             <Grid item xs={12}>

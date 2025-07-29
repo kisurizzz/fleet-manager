@@ -56,7 +56,7 @@ export default function FuelRecordsPage() {
     resetForm,
     validateForm,
     getFormData,
-  } = useFuelForm();
+  } = useFuelForm(false, globalPrices);
 
   // Dialog states
   const [dialogOpen, setDialogOpen] = useState(false);

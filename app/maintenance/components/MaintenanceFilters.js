@@ -78,7 +78,11 @@ export const MaintenanceFilters = ({
               setFilterDateRange((prev) => ({ ...prev, start: value }))
             }
             format="dd-MM-yyyy"
-            renderInput={(params) => <TextField {...params} fullWidth />}
+            slotProps={{
+              textField: {
+                fullWidth: true,
+              },
+            }}
           />
         </Grid>
         <Grid item xs={12} md={2}>
@@ -89,7 +93,11 @@ export const MaintenanceFilters = ({
               setFilterDateRange((prev) => ({ ...prev, end: value }))
             }
             format="dd-MM-yyyy"
-            renderInput={(params) => <TextField {...params} fullWidth />}
+            slotProps={{
+              textField: {
+                fullWidth: true,
+              },
+            }}
           />
         </Grid>
         <Grid item xs={12} md={1}>

@@ -6,7 +6,7 @@ import { auth } from "../../../lib/firebase";
  * @param {boolean} isEdit - Whether this is for editing an existing record
  * @returns {Object} Form state and handlers
  */
-export const useFuelForm = (isEdit = false) => {
+export const useFuelForm = (isEdit = false, globalPrices = null) => {
   const [formData, setFormData] = useState({
     vehicleId: "",
     date: null,
@@ -42,10 +42,34 @@ export const useFuelForm = (isEdit = false) => {
    */
   const handleInputChange = (event) => {
     const { name, value } = event.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    
+    // Update the form data first
+    setFormData((prev) => {
+      const updatedData = {
+        ...prev,
+        [name]: value,
+      };
+      
+      // Auto-calculate liters if cost or fuelType changes and we have global prices
+      if ((name === "cost" || name === "fuelType") && globalPrices && globalPrices.autoPopulate) {
+        const costValue = name === "cost" ? value : prev.cost;
+        const fuelTypeValue = name === "fuelType" ? value : prev.fuelType;
+        
+        if (costValue && parseFloat(costValue) > 0) {
+          const calculatedLiters = calculateLitersFromCost(
+            parseFloat(costValue), 
+            fuelTypeValue, 
+            globalPrices
+          );
+          
+          if (calculatedLiters > 0) {
+            updatedData.liters = calculatedLiters.toFixed(2);
+          }
+        }
+      }
+      
+      return updatedData;
+    });
   };
 
   /**

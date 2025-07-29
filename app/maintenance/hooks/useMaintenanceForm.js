@@ -23,14 +23,15 @@ export const useMaintenanceForm = (isEdit = false) => {
   const [isValid, setIsValid] = useState(false);
 
   // Set default date after hydration to avoid SSR mismatch
+  // Only set default date for new records, not when editing
   useEffect(() => {
-    if (formData.date === null) {
+    if (formData.date === null && !formData.id) {
       setFormData((prev) => ({
         ...prev,
         date: new Date(),
       }));
     }
-  }, [formData.date]);
+  }, [formData.date, formData.id]);
 
   /**
    * Handle form input changes
@@ -49,9 +50,15 @@ export const useMaintenanceForm = (isEdit = false) => {
    * @param {Date} value - Selected date
    */
   const handleDateChange = (value) => {
+    // Use current date if value is null/invalid
+    const dateValue =
+      value && value instanceof Date && !isNaN(value.getTime())
+        ? value
+        : new Date();
+
     setFormData((prev) => ({
       ...prev,
-      date: value,
+      date: dateValue,
     }));
   };
 
@@ -74,12 +81,24 @@ export const useMaintenanceForm = (isEdit = false) => {
    * @param {Object} record - Maintenance record to edit
    */
   const populateForm = (record) => {
+    // Ensure date is a valid Date object
+    let recordDate = new Date();
+    if (record.date) {
+      if (record.date instanceof Date) {
+        recordDate = record.date;
+      } else if (typeof record.date.toDate === "function") {
+        recordDate = record.date.toDate();
+      } else {
+        recordDate = new Date(record.date);
+      }
+    }
+
     setFormData({
       id: record.id,
-      vehicleId: record.vehicleId,
-      date: record.date,
-      description: record.description,
-      cost: record.cost.toString(),
+      vehicleId: record.vehicleId || "",
+      date: recordDate,
+      description: record.description || "",
+      cost: record.cost ? record.cost.toString() : "",
       serviceProvider: record.serviceProvider || "",
       notes: record.notes || "",
       isService: record.isService || false,
@@ -140,15 +159,26 @@ export const useMaintenanceForm = (isEdit = false) => {
    * @returns {Object} Formatted form data
    */
   const getFormData = () => {
+    // Ensure date is always valid
+    let validDate = formData.date;
+    if (
+      !validDate ||
+      !(validDate instanceof Date) ||
+      isNaN(validDate.getTime())
+    ) {
+      validDate = new Date();
+    }
+
     return {
-      vehicleId: formData.vehicleId,
-      date: formData.date,
-      description: formData.description.trim(),
-      cost: parseFloat(formData.cost),
-      serviceProvider: formData.serviceProvider.trim(),
-      notes: formData.notes.trim(),
-      isService: formData.isService,
-      updateServiceSchedule: formData.updateServiceSchedule,
+      id: formData.id, // Include the record ID when editing
+      vehicleId: formData.vehicleId || "",
+      date: validDate,
+      description: (formData.description || "").trim(),
+      cost: parseFloat(formData.cost || 0),
+      serviceProvider: (formData.serviceProvider || "").trim(),
+      notes: (formData.notes || "").trim(),
+      isService: formData.isService || false,
+      updateServiceSchedule: formData.updateServiceSchedule || false,
     };
   };
 
