@@ -36,9 +36,14 @@ export default function ExpiryAlerts({ analytics }) {
 
           {analytics.expiringInsuranceVehicles.length > 0 ? (
             <>
-              <Alert severity="warning" sx={{ mb: 2 }}>
-                {analytics.expiringInsuranceVehicles.length} vehicle(s) have
-                insurance expiring soon
+              <Alert 
+                severity={analytics.expiringInsuranceVehicles.some(v => v.daysUntilExpiry < 0) ? "error" : "warning"} 
+                sx={{ mb: 2 }}
+              >
+                {analytics.expiringInsuranceVehicles.filter(v => v.daysUntilExpiry < 0).length > 0 && 
+                  `${analytics.expiringInsuranceVehicles.filter(v => v.daysUntilExpiry < 0).length} vehicle(s) have expired insurance. `}
+                {analytics.expiringInsuranceVehicles.filter(v => v.daysUntilExpiry >= 0).length > 0 && 
+                  `${analytics.expiringInsuranceVehicles.filter(v => v.daysUntilExpiry >= 0).length} vehicle(s) have insurance expiring soon.`}
               </Alert>
               <List dense>
                 {analytics.expiringInsuranceVehicles
@@ -50,12 +55,24 @@ export default function ExpiryAlerts({ analytics }) {
                       >
                         <ListItemText
                           primary={`${vehicle.regNumber} - ${vehicle.make} ${vehicle.model}`}
-                          secondary={`Insurance expires in ${vehicle.daysUntilExpiry} days`}
+                          secondary={
+                            vehicle.daysUntilExpiry < 0
+                              ? `Insurance expired ${Math.abs(vehicle.daysUntilExpiry)} days ago`
+                              : `Insurance expires in ${vehicle.daysUntilExpiry} days`
+                          }
                         />
                         <Chip
-                          label={`${vehicle.daysUntilExpiry} days`}
+                          label={
+                            vehicle.daysUntilExpiry < 0
+                              ? "EXPIRED"
+                              : `${vehicle.daysUntilExpiry} days`
+                          }
                           color={
-                            vehicle.daysUntilExpiry <= 7 ? "error" : "warning"
+                            vehicle.daysUntilExpiry < 0 
+                              ? "error" 
+                              : vehicle.daysUntilExpiry <= 7 
+                              ? "error" 
+                              : "warning"
                           }
                           size="small"
                           sx={{ ml: 1 }}
@@ -67,7 +84,7 @@ export default function ExpiryAlerts({ analytics }) {
             </>
           ) : (
             <Alert severity="success">
-              No vehicles with expiring insurance in the next 30 days
+              No vehicles with expired or expiring insurance
             </Alert>
           )}
         </Paper>
@@ -85,9 +102,14 @@ export default function ExpiryAlerts({ analytics }) {
 
           {analytics.expiringInspectionVehicles?.length > 0 ? (
             <>
-              <Alert severity="warning" sx={{ mb: 2 }}>
-                {analytics.expiringInspectionVehicles.length} vehicle(s) have
-                inspection expiring soon
+              <Alert 
+                severity={analytics.expiringInspectionVehicles.some(v => v.daysUntilExpiry < 0) ? "error" : "warning"} 
+                sx={{ mb: 2 }}
+              >
+                {analytics.expiringInspectionVehicles.filter(v => v.daysUntilExpiry < 0).length > 0 && 
+                  `${analytics.expiringInspectionVehicles.filter(v => v.daysUntilExpiry < 0).length} vehicle(s) have expired inspection. `}
+                {analytics.expiringInspectionVehicles.filter(v => v.daysUntilExpiry >= 0).length > 0 && 
+                  `${analytics.expiringInspectionVehicles.filter(v => v.daysUntilExpiry >= 0).length} vehicle(s) have inspection expiring soon.`}
               </Alert>
               <List dense>
                 {analytics.expiringInspectionVehicles
@@ -99,12 +121,24 @@ export default function ExpiryAlerts({ analytics }) {
                       >
                         <ListItemText
                           primary={`${vehicle.regNumber} - ${vehicle.make} ${vehicle.model}`}
-                          secondary={`Inspection expires in ${vehicle.daysUntilExpiry} days`}
+                          secondary={
+                            vehicle.daysUntilExpiry < 0
+                              ? `Inspection expired ${Math.abs(vehicle.daysUntilExpiry)} days ago`
+                              : `Inspection expires in ${vehicle.daysUntilExpiry} days`
+                          }
                         />
                         <Chip
-                          label={`${vehicle.daysUntilExpiry} days`}
+                          label={
+                            vehicle.daysUntilExpiry < 0
+                              ? "EXPIRED"
+                              : `${vehicle.daysUntilExpiry} days`
+                          }
                           color={
-                            vehicle.daysUntilExpiry <= 7 ? "error" : "warning"
+                            vehicle.daysUntilExpiry < 0 
+                              ? "error" 
+                              : vehicle.daysUntilExpiry <= 7 
+                              ? "error" 
+                              : "warning"
                           }
                           size="small"
                           sx={{ ml: 1 }}
@@ -116,7 +150,7 @@ export default function ExpiryAlerts({ analytics }) {
             </>
           ) : (
             <Alert severity="success">
-              No vehicles with expiring inspection in the next 30 days
+              No vehicles with expired or expiring inspection
             </Alert>
           )}
         </Paper>

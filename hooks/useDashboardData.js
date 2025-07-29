@@ -211,15 +211,14 @@ export function useDashboardData() {
       const lastMonth = startOfMonth(subMonths(today, 1));
       const thirtyDaysFromNow = addDays(today, 30);
 
-      // Count expiring documents
+      // Count expiring and expired documents (include already expired + expiring within 30 days)
       const expiringInsuranceVehicles = vehicles
         .filter((vehicle) => {
           if (!vehicle.insuranceExpiry) return false;
           const expiryDate = vehicle.insuranceExpiry.toDate();
-          return (
-            isAfter(expiryDate, today) &&
-            !isAfter(expiryDate, thirtyDaysFromNow)
-          );
+          const daysUntilExpiry = differenceInDays(expiryDate, today);
+          // Include vehicles that are expired (negative days) OR expiring within 30 days
+          return daysUntilExpiry <= 30;
         })
         .map((vehicle) => ({
           ...vehicle,
@@ -233,10 +232,9 @@ export function useDashboardData() {
         .filter((vehicle) => {
           if (!vehicle.inspectionExpiry) return false;
           const expiryDate = vehicle.inspectionExpiry.toDate();
-          return (
-            isAfter(expiryDate, today) &&
-            !isAfter(expiryDate, thirtyDaysFromNow)
-          );
+          const daysUntilExpiry = differenceInDays(expiryDate, today);
+          // Include vehicles that are expired (negative days) OR expiring within 30 days
+          return daysUntilExpiry <= 30;
         })
         .map((vehicle) => ({
           ...vehicle,
